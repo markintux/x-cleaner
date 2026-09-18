@@ -1,0 +1,39 @@
+{
+  "name": "x-cleaner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CLI local-first para organizar e limpar interações da própria conta no X.",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "x-cleaner": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build"
+  },
+  "dependencies": {
+    "@zip-js/zip-js": "npm:@zip.js/zip.js@2.15.0",
+    "commander": "15.0.0",
+    "playwright": "1.63.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "24.10.1",
+    "@vitest/coverage-v8": "4.1.6",
+    "eslint": "9.39.1",
+    "prettier": "3.9.8",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0",
+    "vitest": "4.1.6"
+  }
+}

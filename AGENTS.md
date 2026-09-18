@@ -28,6 +28,16 @@ Read these documents before implementation:
   a phase is considered complete.
 - Do not use PHP, Composer, Artisan, PHPUnit, Laravel, or Sail in this project.
 - Use Context7 before relying on library, framework, SDK, API, or CLI details.
+- Verify changes with `npm run check`; its component commands are `npm test`,
+  `npm run typecheck`, `npm run lint`, `npm run format:check`, and `npm run build`.
+
+## Localization and test data
+
+- All normal CLI text is Portuguese-first and must be read through stable message
+  keys. Domain values, persistence values, and error codes must remain
+  language-neutral.
+- Tests and committed fixtures use synthetic identifiers and text only. Create
+  a fresh temporary directory for each test and remove it afterward.
 
 ## Architecture
 

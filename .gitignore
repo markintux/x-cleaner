@@ -14,6 +14,14 @@
 !.env.example
 
 *.zip
+!tests/fixtures/
+!tests/fixtures/**/*.zip
+/archive/
+/archives/
+/x-archive/
+/x-archives/
+/extracted-archive/
+/extracted-archives/
 *.sqlite
 *.sqlite-*
 *.db
@@ -24,6 +32,8 @@
 *.webm
 
 /browser-profile/
+/cookies/
+/logs/
 /screenshots/
 /traces/
 /videos/

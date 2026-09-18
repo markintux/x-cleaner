@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { lstat } from "node:fs/promises";
 import { ArchiveSourceError, type ArchiveSource } from "../ports/archive-source.js";
 import type { CatalogRepository } from "../ports/catalog-repository.js";
 import type { ArchiveImport, InteractionType, ManagedAccount } from "../../domain/interaction.js";
@@ -7,6 +8,11 @@ import {
   UnsupportedArchiveError
 } from "../../infrastructure/archive/archive-detector.js";
 import { DirectoryArchiveSource } from "../../infrastructure/archive/directory-archive-source.js";
+import type { DirectoryArchiveSourceOptions } from "../../infrastructure/archive/directory-archive-source.js";
+import {
+  ZipArchiveSource,
+  type ZipArchiveSourceOptions
+} from "../../infrastructure/archive/zip-archive-source.js";
 import type {
   ParsedArchive,
   NormalizedArchiveInteraction
@@ -20,6 +26,7 @@ export interface ImportArchiveOptions {
   readonly idFactory?: () => string;
   readonly batchSize?: number;
   readonly sourceFactory?: (directory: string) => ArchiveSource;
+  readonly sourceOptions?: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
 }
 
 export interface ImportArchiveResult {
@@ -42,7 +49,8 @@ export class ImportArchive {
   readonly #now: () => string;
   readonly #idFactory: () => string;
   readonly #batchSize: number;
-  readonly #sourceFactory: (directory: string) => ArchiveSource;
+  readonly #sourceFactory: ((input: string) => ArchiveSource) | undefined;
+  readonly #sourceOptions: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
 
   constructor(
     private readonly database: SqliteDatabase,
@@ -53,15 +61,18 @@ export class ImportArchive {
     this.#now = options.now ?? (() => new Date().toISOString());
     this.#idFactory = options.idFactory ?? randomUUID;
     this.#batchSize = options.batchSize ?? 100;
-    this.#sourceFactory =
-      options.sourceFactory ?? ((directory) => new DirectoryArchiveSource(directory));
+    this.#sourceFactory = options.sourceFactory;
+    this.#sourceOptions = options.sourceOptions ?? {};
     if (!Number.isSafeInteger(this.#batchSize) || this.#batchSize <= 0) {
       throw new Error("INVALID_IMPORT_BATCH_SIZE");
     }
   }
 
   async execute(input: string | ArchiveSource): Promise<ImportArchiveResult> {
-    const source = typeof input === "string" ? this.#sourceFactory(input) : input;
+    const source =
+      typeof input === "string"
+        ? (this.#sourceFactory?.(input) ?? (await sourceFromPath(input, this.#sourceOptions)))
+        : input;
     const importId = this.#idFactory();
     const startedAt = this.#now();
     let sourceSha256 = fallbackFingerprint(source.label);
@@ -242,9 +253,33 @@ export async function importArchive(
 }
 
 function validateSource(source: ArchiveSource): void {
-  if (source.kind !== "DIRECTORY" || source.label.length === 0 || source.label.includes("/")) {
+  if (
+    (source.kind !== "DIRECTORY" && source.kind !== "ZIP") ||
+    source.label.length === 0 ||
+    source.label.includes("/") ||
+    source.label.includes("\\") ||
+    /^[A-Za-z]:/u.test(source.label)
+  ) {
     throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
   }
+}
+
+async function sourceFromPath(
+  input: string,
+  options: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions
+): Promise<ArchiveSource> {
+  let stats;
+  try {
+    stats = await lstat(input);
+  } catch {
+    throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
+  }
+  if (stats.isSymbolicLink()) {
+    throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
+  }
+  if (stats.isDirectory()) return new DirectoryArchiveSource(input, options);
+  if (stats.isFile()) return new ZipArchiveSource(input, options);
+  throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
 }
 
 function toInteractionWrite(
@@ -302,6 +337,17 @@ function isSanitizedErrorCode(value: string): boolean {
     "ARCHIVE_ENTRY_NOT_REGULAR",
     "ARCHIVE_INVALID_UTF8",
     "ARCHIVE_SOURCE_CHANGED",
+    "ARCHIVE_ENTRY_ENCRYPTED",
+    "ARCHIVE_ENTRY_DUPLICATE",
+    "ARCHIVE_ENTRY_AMBIGUOUS",
+    "ARCHIVE_ENTRY_COMPRESSED_TOO_LARGE",
+    "ARCHIVE_ENTRY_SIZE_INVALID",
+    "ARCHIVE_TOO_MANY_ENTRIES",
+    "ARCHIVE_TOTAL_TOO_LARGE",
+    "ARCHIVE_TOTAL_COMPRESSED_TOO_LARGE",
+    "ARCHIVE_APPENDED_DATA_TOO_LARGE",
+    "ARCHIVE_AMBIGUOUS",
+    "ARCHIVE_MALFORMED",
     "MALFORMED_ARCHIVE_WRAPPER",
     "UNSAFE_ARCHIVE_JAVASCRIPT",
     "MALFORMED_ARCHIVE_RECORD",

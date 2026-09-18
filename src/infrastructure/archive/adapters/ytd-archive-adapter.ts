@@ -63,7 +63,7 @@ export class YtdArchiveAdapter implements ArchiveAdapter {
     const interactions: NormalizedArchiveInteraction[] = [];
 
     for (const item of assignments) {
-      switch (item.assignment.category) {
+      switch (canonicalCategory(item.assignment.category)) {
         case "account":
           account = mergeAccounts(account, this.#accountParser.parse(item.assignment.values));
           break;
@@ -83,7 +83,23 @@ export class YtdArchiveAdapter implements ArchiveAdapter {
 }
 
 export function isSupportedCategory(category: string): boolean {
-  return category === "account" || category === "tweets" || category === "like";
+  return canonicalCategory(category) !== null;
+}
+
+export function canonicalCategory(category: string): "account" | "tweets" | "like" | null {
+  switch (category.toLowerCase()) {
+    case "account":
+    case "accounts":
+      return "account";
+    case "tweet":
+    case "tweets":
+      return "tweets";
+    case "like":
+    case "likes":
+      return "like";
+    default:
+      return null;
+  }
 }
 
 function mergeAccounts(left: ParsedAccount, right: ParsedAccount): ParsedAccount {

@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, opendir, realpath } from "node:fs/promises";
 import os from "node:os";
@@ -11,6 +10,7 @@ import {
   type ArchiveSource,
   type ArchiveTextReadOptions
 } from "../../application/ports/archive-source.js";
+import { fingerprintManifest } from "./source-fingerprint.js";
 
 export interface DirectoryArchiveSourceOptions {
   readonly maxEntryBytes?: number;
@@ -77,16 +77,9 @@ export class DirectoryArchiveSource implements ArchiveSource {
   }
 
   async fingerprint(): Promise<string> {
-    const hash = createHash("sha256");
-    for (const entry of await this.entries()) {
-      hash.update(entry.name, "utf8");
-      hash.update(new Uint8Array([0]));
-      for await (const chunk of this.#openBytes(entry.name, Number.MAX_SAFE_INTEGER)) {
-        hash.update(chunk);
-      }
-      hash.update(new Uint8Array([0]));
-    }
-    return hash.digest("hex");
+    return fingerprintManifest(await this.entries(), (name) =>
+      this.#openBytes(name, Number.MAX_SAFE_INTEGER)
+    );
   }
 
   async #validatedRoot(): Promise<string> {

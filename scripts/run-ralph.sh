@@ -25,8 +25,8 @@ if ! command -v ralph >/dev/null 2>&1; then
   exit 1
 fi
 
-export RALPH_VERIFY_MODEL="${RALPH_VERIFY_MODEL:-gpt-5.6-terra}"
-export RALPH_VERIFY_EFFORT="${RALPH_VERIFY_EFFORT:-high}"
+export RALPH_VERIFY_MODEL="${RALPH_VERIFY_MODEL:-gpt-5.6-luna}"
+export RALPH_VERIFY_EFFORT="${RALPH_VERIFY_EFFORT:-xhigh}"
 
 if [[ "${1:-}" == "--check-env" ]]; then
   git rev-parse --is-inside-work-tree >/dev/null
@@ -43,7 +43,7 @@ if [[ "${1:-}" == "--check-env" ]]; then
   codex login status >/dev/null
 
   echo "Environment ready: Node $(node --version), Ralph $(command -v ralph)."
-  echo "Implementation model: gpt-5.6-terra (effort: high)"
+  echo "Implementation model: gpt-5.6-luna (effort: xhigh)"
   echo "Verification model: $RALPH_VERIFY_MODEL (effort: $RALPH_VERIFY_EFFORT)"
   echo "Gate 2: npm run check"
   echo "Plan: docs/features/x-cleaner-v1/project-phases.md"
@@ -53,8 +53,8 @@ fi
 exec ralph \
   docs/features/x-cleaner-v1/project-phases.md \
   --engine codex \
-  --model gpt-5.6-terra \
-  --effort high \
+  --model gpt-5.6-luna \
+  --effort xhigh \
   --test-cmd "npm run check" \
   --dashboard \
   "$@"

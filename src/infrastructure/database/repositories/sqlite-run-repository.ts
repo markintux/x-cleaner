@@ -93,6 +93,13 @@ export class SqliteRunRepository implements RunRepository {
     return row === undefined ? null : mapRunItem(row as Row);
   }
 
+  listRunItems(runId: string): readonly CleaningRunItem[] {
+    return this.database.connection
+      .prepare("SELECT * FROM cleaning_run_items WHERE run_id = ? ORDER BY sequence")
+      .all(runId)
+      .map((row) => mapRunItem(row as Row));
+  }
+
   createBatch(batch: RunBatch, transaction?: RepositoryTransaction): void {
     const connection = connectionFor(this.database.connection, transaction);
     connection
@@ -121,7 +128,12 @@ export class SqliteRunRepository implements RunRepository {
     return row === undefined ? null : mapBatch(row as Row);
   }
 
-  pageEligibleItems(runId: string, now: string, limit: number): EligibleRunItemPage {
+  pageEligibleItems(
+    runId: string,
+    now: string,
+    limit: number,
+    afterSequence = 0
+  ): EligibleRunItemPage {
     if (!Number.isSafeInteger(limit) || limit <= 0) {
       throw new Error("INVALID_PAGE_LIMIT");
     }
@@ -129,9 +141,10 @@ export class SqliteRunRepository implements RunRepository {
       .prepare(
         `SELECT * FROM cleaning_run_items
          WHERE run_id = ? AND status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= ?)
+           AND sequence > ?
          ORDER BY sequence LIMIT ?`
       )
-      .all(runId, now, limit + 1);
+      .all(runId, now, afterSequence, limit + 1);
     return {
       items: rows.slice(0, limit).map((row) => mapRunItem(row as Row)),
       hasMore: rows.length > limit

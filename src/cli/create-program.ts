@@ -4,6 +4,8 @@ import { createDryRunCommand } from "./commands/dry-run.js";
 import { createImportCommand } from "./commands/import.js";
 import { createStatusCommand } from "./commands/status.js";
 import { createSessionCommand } from "./commands/session.js";
+import { createRunCommand } from "./commands/run.js";
+import { createResumeCommand } from "./commands/resume.js";
 import type { CliDependencies } from "./dependencies.js";
 
 export function createProgram(dependencies: CliDependencies): Command {
@@ -42,6 +44,28 @@ export function createProgram(dependencies: CliDependencies): Command {
     });
 
   program.addCommand(createSessionCommand(dependencies));
+
+  program
+    .command("run <planId>")
+    .description(dependencies.translator.translate("cli.runDescription"))
+    .option("--limit <number>", dependencies.translator.translate("cli.limitOption"))
+    .action(async (planId, options, command) => {
+      await createRunCommand(dependencies)(planId, {
+        ...options,
+        ...command.optsWithGlobals()
+      });
+    });
+
+  program
+    .command("resume <runId>")
+    .description(dependencies.translator.translate("cli.resumeDescription"))
+    .option("--limit <number>", dependencies.translator.translate("cli.limitOption"))
+    .action(async (runId, options, command) => {
+      await createResumeCommand(dependencies)(runId, {
+        ...options,
+        ...command.optsWithGlobals()
+      });
+    });
 
   return program;
 }

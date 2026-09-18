@@ -20,9 +20,15 @@ export interface RunRepository {
   getRun(runId: string): CleaningRun | null;
   getRunForPlan(planId: string): CleaningRun | null;
   getRunItem(runItemId: number): CleaningRunItem | null;
+  listRunItems(runId: string): readonly CleaningRunItem[];
   createBatch(batch: RunBatch, transaction?: RepositoryTransaction): void;
   getBatch(batchId: string): RunBatch | null;
-  pageEligibleItems(runId: string, now: string, limit: number): EligibleRunItemPage;
+  pageEligibleItems(
+    runId: string,
+    now: string,
+    limit: number,
+    afterSequence?: number
+  ): EligibleRunItemPage;
   updateRunItem(
     runItemId: number,
     update: RunItemUpdate,

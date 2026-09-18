@@ -1,30 +1,16 @@
 import type {
-  NewInteractionAttempt,
-  NewRunCheckpoint
-} from "../../application/ports/audit-repository.js";
-import type { RunItemUpdate } from "../../application/ports/run-repository.js";
-import type { CleaningRun, RunBatch } from "../../domain/run.js";
+  CommitAttemptWork,
+  CommitBatchBoundaryWork
+} from "../../application/ports/execution-unit-of-work.js";
 import type { SqliteDatabase } from "./database.js";
 import { SqliteRepositoryTransaction } from "./repository-transaction.js";
 import type { SqliteAuditRepository } from "./repositories/sqlite-audit-repository.js";
 import type { SqliteRunRepository } from "./repositories/sqlite-run-repository.js";
 
-export interface CommitAttemptWork {
-  readonly attempt: NewInteractionAttempt;
-  readonly runItemId: number;
-  readonly runItemUpdate: RunItemUpdate;
-  readonly checkpoint: NewRunCheckpoint;
-  readonly batch?: {
-    readonly id: string;
-    readonly status: RunBatch["status"];
-    readonly finishedAt: string | null;
-  };
-  readonly run?: {
-    readonly id: string;
-    readonly status: CleaningRun["status"];
-    readonly state: Pick<CleaningRun, "pauseReason" | "startedAt" | "pausedAt" | "finishedAt">;
-  };
-}
+export type {
+  CommitAttemptWork,
+  CommitBatchBoundaryWork
+} from "../../application/ports/execution-unit-of-work.js";
 
 /**
  * The sole persistence boundary for a normalized engine result. No next item
@@ -54,6 +40,20 @@ export class UnitOfWork {
       if (work.run !== undefined) {
         this.runs.updateRunStatus(work.run.id, work.run.status, work.run.state, transaction);
       }
+    });
+  }
+
+  commitBatchBoundary(work: CommitBatchBoundaryWork): void {
+    this.database.transaction((connection) => {
+      const transaction = new SqliteRepositoryTransaction(connection);
+      this.audit.appendCheckpoint(work.checkpoint, transaction);
+      this.runs.updateBatchStatus(
+        work.batch.id,
+        work.batch.status,
+        work.batch.finishedAt,
+        transaction
+      );
+      this.runs.updateRunStatus(work.run.id, work.run.status, work.run.state, transaction);
     });
   }
 }

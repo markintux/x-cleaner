@@ -3,6 +3,8 @@ import { mkdir, open, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import type { ExecutorLockPort } from "../../application/ports/executor-lock.js";
+
 export interface ExecutorLockMetadata {
   readonly pid: number;
   readonly hostname: string;
@@ -39,7 +41,7 @@ export interface ExecutorLockOptions {
  * Filesystem ownership is intentionally separate from SQLite. A stale file is
  * diagnostic evidence only: it is never removed or taken over automatically.
  */
-export class ExecutorLock {
+export class ExecutorLock implements ExecutorLockPort {
   readonly #now: () => string;
   readonly #pid: () => number;
   readonly #hostname: () => string;

@@ -2,6 +2,15 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import type { CatalogRepository } from "../application/ports/catalog-repository.js";
+import type {
+  ConfirmAccountInput,
+  ConfirmedAccountResult
+} from "../application/session/confirm-account.js";
+import type {
+  ClearSessionInput,
+  ClearSessionResult
+} from "../application/session/clear-session.js";
+import type { LoginSessionResult } from "../application/session/login-session.js";
 import type { PlanRepository } from "../application/ports/plan-repository.js";
 import type { Translator } from "../i18n/translator.js";
 import { migrations } from "../infrastructure/database/migrations/index.js";
@@ -21,6 +30,26 @@ export interface CliRepositories {
   readonly close?: () => void;
 }
 
+export interface SessionPrompt {
+  confirm(question: string): Promise<boolean>;
+}
+
+export interface SessionLoginRunner {
+  execute(): Promise<LoginSessionResult>;
+}
+
+export interface SessionCliDependencies {
+  readonly prompt?: SessionPrompt;
+  readonly createLoginSession?: (
+    dataDirectory: string
+  ) => SessionLoginRunner | Promise<SessionLoginRunner>;
+  readonly confirmAccount?: (
+    catalog: CatalogRepository,
+    input: ConfirmAccountInput
+  ) => ConfirmedAccountResult;
+  readonly clearSession?: (input: ClearSessionInput) => Promise<ClearSessionResult>;
+}
+
 export interface CliDependencies {
   readonly output: CliOutput;
   readonly translator: Translator;
@@ -32,6 +61,7 @@ export interface CliDependencies {
   readonly repositoryFactory?: (
     dataDirectory: string
   ) => CliRepositories | Promise<CliRepositories>;
+  readonly session?: SessionCliDependencies;
 }
 
 export async function openCliRepositories(

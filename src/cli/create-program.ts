@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { createDryRunCommand } from "./commands/dry-run.js";
 import { createImportCommand } from "./commands/import.js";
 import { createStatusCommand } from "./commands/status.js";
+import { createSessionCommand } from "./commands/session.js";
 import type { CliDependencies } from "./dependencies.js";
 
 export function createProgram(dependencies: CliDependencies): Command {
@@ -39,6 +40,8 @@ export function createProgram(dependencies: CliDependencies): Command {
     .action(async (_options, command) => {
       await createDryRunCommand(dependencies)(command.optsWithGlobals());
     });
+
+  program.addCommand(createSessionCommand(dependencies));
 
   return program;
 }

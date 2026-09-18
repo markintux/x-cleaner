@@ -34,7 +34,31 @@ export const messageKeys = [
   "dryRun.typeCount",
   "dryRun.total",
   "dryRun.empty",
-  "selection.error"
+  "selection.error",
+  "cli.sessionDescription",
+  "cli.sessionLoginDescription",
+  "cli.sessionStatusDescription",
+  "cli.sessionClearDescription",
+  "session.localGuidance",
+  "session.loginStarted",
+  "session.profile",
+  "session.detectedAccount",
+  "session.confirmQuestion",
+  "session.confirmed",
+  "session.rejected",
+  "session.loginRequired",
+  "session.sessionExpired",
+  "session.challenge",
+  "session.unknown",
+  "session.identityMismatch",
+  "session.statusHeader",
+  "session.confirmedAccount",
+  "session.notConfirmed",
+  "session.clearGuidance",
+  "session.clearQuestion",
+  "session.clearCanceled",
+  "session.cleared",
+  "session.clearProfile"
 ] as const;
 
 export type MessageKey = (typeof messageKeys)[number];

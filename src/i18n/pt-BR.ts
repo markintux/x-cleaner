@@ -38,5 +38,36 @@ export const ptBR: MessageCatalog = {
   "dryRun.typeCount": "{type}: {count}",
   "dryRun.total": "Total selecionado: {count}",
   "dryRun.empty": "Nenhuma interação corresponde aos filtros; nenhum plano foi salvo.",
-  "selection.error": "Seleção inválida: {errorCode}"
+  "selection.error": "Seleção inválida: {errorCode}",
+  "cli.sessionDescription": "gerencia a sessão local autenticada do X",
+  "cli.sessionLoginDescription": "abre o fluxo oficial visível para login manual",
+  "cli.sessionStatusDescription": "mostra a conta confirmada e o estado local da sessão",
+  "cli.sessionClearDescription": "remove somente o perfil de navegador dedicado",
+  "session.localGuidance":
+    "A sessão fica somente neste computador. O navegador visível abrirá o site oficial do X; faça o login diretamente nele e não digite sua senha no terminal.",
+  "session.loginStarted": "Aguardando autenticação manual no navegador visível.",
+  "session.profile": "Perfil dedicado da sessão: {profileDirectory}",
+  "session.detectedAccount": "Conta detectada: @{handle}",
+  "session.confirmQuestion": "Confirmar esta conta para este diretório? [s/N]",
+  "session.confirmed": "Conta @{handle} confirmada para este diretório de dados.",
+  "session.rejected": "Conta não confirmada; nenhuma alteração destrutiva foi autorizada.",
+  "session.loginRequired":
+    "Nenhuma autenticação foi detectada; conclua o login manual e tente novamente.",
+  "session.sessionExpired":
+    "A sessão expirou; use `x-cleaner session login` para autenticar novamente.",
+  "session.challenge":
+    "O X apresentou um desafio de segurança. Resolva-o manualmente; o X Cleaner não tenta contorná-lo.",
+  "session.unknown":
+    "O estado da página do X não pôde ser comprovado com segurança; nenhuma ação foi realizada.",
+  "session.identityMismatch":
+    "A conta detectada não corresponde à identidade já vinculada ao diretório; nenhuma alteração foi realizada.",
+  "session.statusHeader": "Estado da sessão local:",
+  "session.confirmedAccount": "Conta confirmada: @{handle}",
+  "session.notConfirmed": "Nenhuma conta autenticada foi confirmada neste diretório.",
+  "session.clearGuidance":
+    "Esta ação remove somente os dados da sessão do perfil dedicado. Catálogo, arquivo, banco, logs, checkpoints e relatórios serão preservados.",
+  "session.clearQuestion": "Remover o perfil dedicado da sessão? [s/N]",
+  "session.clearCanceled": "Limpeza da sessão cancelada; nenhum arquivo foi removido.",
+  "session.cleared": "Dados da sessão removidos com segurança.",
+  "session.clearProfile": "Perfil removido: {profileDirectory}"
 };

@@ -31,6 +31,10 @@ import { SqliteRunRepository } from "../infrastructure/database/repositories/sql
 import { SqliteAuditRepository } from "../infrastructure/database/repositories/sqlite-audit-repository.js";
 import { UnitOfWork } from "../infrastructure/database/unit-of-work.js";
 import { ExecutorLock } from "../infrastructure/lock/executor-lock.js";
+import {
+  BrowserCleanerEngine,
+  type BrowserCleanerEngineOptions
+} from "../infrastructure/browser/browser-cleaner-engine.js";
 
 export interface CliOutput {
   writeLine(message: string): void;
@@ -56,6 +60,7 @@ export interface RunCliDependencies {
   readonly clock?: Clock;
   readonly delay?: Delay;
   readonly lock?: ExecutorLockPort;
+  readonly createBrowserEngine?: (options: BrowserCleanerEngineOptions) => CleanerEngine;
 }
 
 export interface SessionPrompt {
@@ -131,3 +136,15 @@ export const consoleOutput: CliOutput = {
     process.stdout.write(`${message}\n`);
   }
 };
+
+/**
+ * Creates the real browser boundary for a confirmed destructive run only.
+ * The constructor is lazy with respect to Playwright; the context is launched
+ * by the engine on the first item after Core has accepted the batch.
+ */
+export function createConfirmedBrowserEngine(
+  dataDirectory: string,
+  confirmedHandle: string
+): CleanerEngine {
+  return new BrowserCleanerEngine({ dataDirectory, confirmedHandle });
+}

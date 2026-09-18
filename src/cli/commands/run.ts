@@ -13,9 +13,12 @@ import { LoginSession } from "../../application/session/login-session.js";
 import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import {
   openCliRepositories,
+  createConfirmedBrowserEngine,
   type CliDependencies,
   type CliRepositories
 } from "../dependencies.js";
+import type { CleanerEngine } from "../../application/ports/cleaner-engine.js";
+import type { ExecuteBatchResult } from "../../application/runs/execute-batch.js";
 
 export interface RunCommandOptions {
   readonly dataDir?: string;
@@ -75,10 +78,6 @@ async function executeCommand(
     );
     const configuredEngine =
       dependencies.run?.engine ?? dependencies.run?.cleanerEngine ?? engineFromLegacy(dependencies);
-    if (configuredEngine === null || configuredEngine === undefined) {
-      throw new Error("ENGINE_NOT_CONFIGURED");
-    }
-    const engine = configuredEngine;
     const confirmationOptions = dependencies.run?.clock ? { clock: dependencies.run.clock } : {};
     const localizedConfirmationOptions = {
       ...confirmationOptions,
@@ -115,22 +114,34 @@ async function executeCommand(
     if (lock === undefined || services.unitOfWork === undefined || services.audit === undefined) {
       throw new Error("EXECUTION_SERVICES_NOT_CONFIGURED");
     }
+    const engine =
+      configuredEngine ??
+      dependencies.run?.createBrowserEngine?.({
+        dataDirectory,
+        confirmedHandle: run.boundHandle
+      }) ??
+      createConfirmedBrowserEngine(dataDirectory, run.boundHandle);
     const executionOptions = {
       ...(dependencies.run?.clock === undefined ? {} : { clock: dependencies.run.clock }),
       ...(dependencies.run?.delay === undefined ? {} : { delay: dependencies.run.delay })
     };
-    const result = await new ExecuteBatch(
-      {
-        plans: services.plans,
-        catalog: services.catalog,
-        runs: services.runs,
-        audit: services.audit,
-        unitOfWork: services.unitOfWork,
-        lock,
-        engine
-      },
-      executionOptions
-    ).execute({ runId: run.id, batchId: confirmation.batch.id, account });
+    let result: ExecuteBatchResult;
+    try {
+      result = await new ExecuteBatch(
+        {
+          plans: services.plans,
+          catalog: services.catalog,
+          runs: services.runs,
+          audit: services.audit,
+          unitOfWork: services.unitOfWork,
+          lock,
+          engine
+        },
+        executionOptions
+      ).execute({ runId: run.id, batchId: confirmation.batch.id, account });
+    } finally {
+      await closeEngine(engine);
+    }
     dependencies.output.writeLine(
       dependencies.translator.translate("run.completed", {
         runId: result.run.id,
@@ -145,6 +156,17 @@ async function executeCommand(
     };
   } finally {
     repositories.close?.();
+  }
+}
+
+async function closeEngine(engine: CleanerEngine): Promise<void> {
+  if (
+    typeof engine === "object" &&
+    engine !== null &&
+    "close" in engine &&
+    typeof engine.close === "function"
+  ) {
+    await engine.close();
   }
 }
 

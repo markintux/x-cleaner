@@ -5,48 +5,7 @@ import {
   type DetectedAccount
 } from "../../../domain/account.js";
 import { xUserId } from "../../../domain/interaction.js";
-
-const HANDLE_EVIDENCE_SELECTORS = [
-  '[data-testid="account-handle"]',
-  '[data-testid="account-switcher"]',
-  '[data-testid="AccountSwitcher_Button"]',
-  '[data-testid="SideNav_AccountSwitcher_Button"]',
-  '[data-testid="UserName"]',
-  '[data-testid="profile-link"]',
-  '[data-testid="AppTabBar_Profile_Link"]',
-  'a[aria-label="Profile"]',
-  "[data-x-handle]",
-  "[data-handle]",
-  'meta[name="x-account-handle"]',
-  'meta[name="twitter:account-handle"]'
-] as const;
-
-const USER_ID_EVIDENCE_SELECTORS = [
-  '[data-testid="account-id"]',
-  '[data-testid="user-id"]',
-  "[data-x-user-id]",
-  "[data-user-id]",
-  'meta[name="x-account-id"]',
-  'meta[name="x-user-id"]'
-] as const;
-
-const LOGIN_SELECTORS = [
-  '[data-testid="login"]',
-  '[data-testid="login-button"]',
-  '[data-testid="login-flow"]',
-  '[data-testid="login-screen"]',
-  '[data-authenticated="false"]',
-  'meta[name="x-authenticated"][content="false"]',
-  'a[href="/login"]',
-  'button[aria-label="Log in"]'
-] as const;
-
-const CHALLENGE_SELECTORS = [
-  '[data-testid="security-challenge"]',
-  '[data-testid="challenge"]',
-  "[data-security-challenge]",
-  'meta[name="x-security-challenge"]'
-] as const;
+import { isXChallengeUrl, isXLoginUrl, X_SELECTORS, X_TEXT_KEYS } from "./selectors.js";
 
 /** Page object containing all supported evidence for the authenticated X account. */
 export class AccountPage {
@@ -99,16 +58,15 @@ export class AccountPage {
 
   private async readHandles(): Promise<readonly string[]> {
     const values: string[] = [];
-    for (const selector of HANDLE_EVIDENCE_SELECTORS) {
+    for (const selector of X_SELECTORS.account.handle) {
       const locator = this.page.locator(selector).first();
       if ((await locator.count()) === 0) {
         continue;
       }
 
-      const profileLink =
-        selector === '[data-testid="profile-link"]' ||
-        selector === '[data-testid="AppTabBar_Profile_Link"]' ||
-        selector === 'a[aria-label="Profile"]';
+      const profileLink = X_SELECTORS.account.profileLink.some(
+        (profileSelector) => profileSelector === selector
+      );
       if (profileLink) {
         const handle = extractHandle(await locator.getAttribute("href"), false, true);
         if (handle !== null && !values.includes(handle)) {
@@ -137,7 +95,7 @@ export class AccountPage {
     readonly invalid: boolean;
   }> {
     const values: string[] = [];
-    for (const selector of USER_ID_EVIDENCE_SELECTORS) {
+    for (const selector of X_SELECTORS.account.userId) {
       const locator = this.page.locator(selector).first();
       if ((await locator.count()) === 0) {
         continue;
@@ -163,39 +121,32 @@ export class AccountPage {
   }
 
   private async hasChallengeEvidence(): Promise<boolean> {
-    if (/\/(?:challenge|account\/access|i\/flow\/verify)(?:\/|$)/u.test(this.page.url())) {
+    if (isXChallengeUrl(this.page.url())) {
       return true;
     }
-    if (await this.hasAnySelector(CHALLENGE_SELECTORS)) {
+    if (await this.hasAnySelector(X_SELECTORS.account.challenge)) {
       return true;
     }
     const body = (await this.page.locator("body").textContent())?.toLowerCase() ?? "";
-    return [
-      "security challenge",
-      "suspicious login",
-      "captcha",
-      "desafio de segurança",
-      "verificação de segurança",
-      "atividade suspeita"
-    ].some((phrase) => body.includes(phrase));
+    return X_TEXT_KEYS.challenge.some((phrase) => body.includes(phrase));
   }
 
   private async hasLoginEvidence(): Promise<boolean> {
-    if (/\/(?:i\/flow\/login|login)(?:\/|$)/u.test(this.page.url())) {
+    if (isXLoginUrl(this.page.url())) {
       return true;
     }
-    if ((await this.hasAnySelector(LOGIN_SELECTORS)) || (await this.hasSessionExpiredEvidence())) {
+    if (
+      (await this.hasAnySelector(X_SELECTORS.account.login)) ||
+      (await this.hasSessionExpiredEvidence())
+    ) {
       return true;
     }
     const body = (await this.page.locator("body").textContent())?.toLowerCase() ?? "";
-    return body.includes("session expired") || body.includes("sessão expirada");
+    return X_TEXT_KEYS.sessionExpired.some((phrase) => body.includes(phrase));
   }
 
   private async hasSessionExpiredEvidence(): Promise<boolean> {
-    return (
-      (await this.hasSelector('[data-session-expired="true"]')) ||
-      (await this.hasSelector('meta[name="x-session-expired"][content="true"]'))
-    );
+    return await this.hasAnySelector(X_SELECTORS.account.sessionExpired);
   }
 
   private async hasAnySelector(selectors: readonly string[]): Promise<boolean> {

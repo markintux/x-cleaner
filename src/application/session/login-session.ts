@@ -5,9 +5,10 @@ import type {
 } from "../ports/browser-session.js";
 import { BrowserContextFactory } from "../../infrastructure/browser/browser-context-factory.js";
 import { AccountPage } from "../../infrastructure/browser/x/account-page.js";
+import { X_URLS } from "../../infrastructure/browser/x/selectors.js";
 import type { AccountDetection, DetectedAccount } from "../../domain/account.js";
 
-export const OFFICIAL_X_LOGIN_URL = "https://x.com/i/flow/login";
+export const OFFICIAL_X_LOGIN_URL = X_URLS.login;
 
 interface AccountPageDetector {
   detect(): Promise<AccountDetection>;

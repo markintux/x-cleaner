@@ -17,7 +17,8 @@ export default tseslint.config(
       "screenshots/**",
       "traces/**",
       "videos/**",
-      "reports/**"
+      "reports/**",
+      "tests/fixtures/**"
     ]
   },
   js.configs.recommended,

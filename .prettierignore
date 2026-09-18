@@ -15,6 +15,7 @@ reports/
 screenshots/
 traces/
 videos/
+tests/fixtures/
 *.zip
 *.sqlite
 *.sqlite-*

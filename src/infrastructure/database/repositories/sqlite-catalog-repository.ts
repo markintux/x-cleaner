@@ -1,6 +1,7 @@
 import type {
   ArchiveImportWrite,
   CatalogRepository,
+  CatalogStatusSnapshot,
   InteractionUpsertResult,
   InteractionWrite,
   ManagedAccountWrite
@@ -16,6 +17,7 @@ import type {
   XInteractionId,
   XUserId
 } from "../../../domain/interaction.js";
+import type { SelectionFilters } from "../../../domain/selection.js";
 import type { SqliteDatabase } from "../database.js";
 import { connectionFor } from "../repository-transaction.js";
 
@@ -242,6 +244,123 @@ export class SqliteCatalogRepository implements CatalogRepository {
       .prepare("SELECT count(*) AS count FROM interactions WHERE account_id = ?")
       .get(accountId) as Row;
     return requiredNumber(row.count, "INVALID_DATABASE_VALUE");
+  }
+
+  getCatalogStatus(): CatalogStatusSnapshot {
+    const account = this.getManagedAccount();
+    const accountId = account?.id ?? null;
+    const importRows = this.database.connection
+      .prepare("SELECT status, count(*) AS count FROM archive_imports GROUP BY status")
+      .all();
+    const sourceRows = this.database.connection
+      .prepare("SELECT source_kind, count(*) AS count FROM archive_imports GROUP BY source_kind")
+      .all();
+    const interactionRows = this.database.connection
+      .prepare(
+        "SELECT type, count(*) AS count FROM interactions WHERE (? IS NULL OR account_id = ?) GROUP BY type"
+      )
+      .all(accountId, accountId);
+
+    const byStatus: Record<ArchiveImportStatus, number> = {
+      PROCESSING: 0,
+      COMPLETED: 0,
+      FAILED: 0
+    };
+    for (const row of importRows) {
+      const status = requiredString((row as Row).status, "INVALID_DATABASE_VALUE");
+      if (status in byStatus) {
+        byStatus[status as ArchiveImportStatus] = requiredNumber(
+          (row as Row).count,
+          "INVALID_DATABASE_VALUE"
+        );
+      }
+    }
+
+    const bySourceKind: Record<ArchiveSourceKind, number> = { ZIP: 0, DIRECTORY: 0 };
+    for (const row of sourceRows) {
+      const sourceKind = requiredString((row as Row).source_kind, "INVALID_DATABASE_VALUE");
+      if (sourceKind in bySourceKind) {
+        bySourceKind[sourceKind as ArchiveSourceKind] = requiredNumber(
+          (row as Row).count,
+          "INVALID_DATABASE_VALUE"
+        );
+      }
+    }
+
+    const byType: Record<InteractionType, number> = {
+      POST: 0,
+      REPLY: 0,
+      REPOST: 0,
+      LIKE: 0
+    };
+    for (const row of interactionRows) {
+      const type = requiredString((row as Row).type, "INVALID_DATABASE_VALUE");
+      if (type in byType) {
+        byType[type as InteractionType] = requiredNumber(
+          (row as Row).count,
+          "INVALID_DATABASE_VALUE"
+        );
+      }
+    }
+
+    const totalImports = Object.values(byStatus).reduce((total, count) => total + count, 0);
+    const totalInteractions = Object.values(byType).reduce((total, count) => total + count, 0);
+    return {
+      account,
+      imports: { total: totalImports, byStatus, bySourceKind },
+      interactions: { total: totalInteractions, byType },
+      lifecycle: byStatus
+    };
+  }
+
+  getHighestInteractionId(accountId: string, transaction?: RepositoryTransaction): number | null {
+    const connection = connectionFor(this.database.connection, transaction);
+    const row = connection
+      .prepare("SELECT max(id) AS max_id FROM interactions WHERE account_id = ?")
+      .get(accountId) as Row;
+    return row.max_id === null ? null : requiredNumber(row.max_id, "INVALID_DATABASE_VALUE");
+  }
+
+  selectInteractions(
+    accountId: string,
+    filters: SelectionFilters,
+    catalogCutoffId: number,
+    transaction?: RepositoryTransaction
+  ): readonly {
+    readonly id: number;
+    readonly type: InteractionType;
+    readonly interactionCreatedAt: string | null;
+  }[] {
+    const connection = connectionFor(this.database.connection, transaction);
+    const placeholders = filters.types.map(() => "?").join(", ");
+    const rows = connection
+      .prepare(
+        `SELECT id, type, interaction_created_at
+         FROM interactions
+         WHERE account_id = ?
+           AND id <= ?
+           AND type IN (${placeholders})
+           AND (? IS NULL OR interaction_created_at >= ?)
+           AND (? IS NULL OR interaction_created_at <= ?)
+         ORDER BY type, interaction_created_at IS NULL, interaction_created_at, id`
+      )
+      .all(
+        accountId,
+        catalogCutoffId,
+        ...filters.types,
+        filters.fromAt,
+        filters.fromAt,
+        filters.toAt,
+        filters.toAt
+      );
+    return rows.map((row) => {
+      const value = row as Row;
+      return {
+        id: requiredNumber(value.id, "INVALID_DATABASE_VALUE"),
+        type: requiredString(value.type, "INVALID_DATABASE_VALUE") as InteractionType,
+        interactionCreatedAt: nullableString(value.interaction_created_at)
+      };
+    });
   }
 
   private getManagedAccountFrom(connection: typeof this.database.connection): ManagedAccount {

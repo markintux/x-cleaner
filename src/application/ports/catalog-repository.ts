@@ -8,6 +8,7 @@ import type {
   XInteractionId,
   XUserId
 } from "../../domain/interaction.js";
+import type { SelectionFilters } from "../../domain/selection.js";
 import type { RepositoryTransaction } from "./repository-transaction.js";
 
 export interface ManagedAccountWrite {
@@ -56,6 +57,27 @@ export interface InteractionUpsertResult {
   readonly kind: InteractionUpsertKind;
 }
 
+export interface CatalogSelectionItem {
+  readonly id: number;
+  readonly type: InteractionType;
+  readonly interactionCreatedAt: string | null;
+}
+
+export interface CatalogStatusSnapshot {
+  readonly account: ManagedAccount | null;
+  readonly imports: {
+    readonly total: number;
+    readonly byStatus: Readonly<Record<ArchiveImportStatus, number>>;
+    readonly bySourceKind: Readonly<Record<ArchiveSourceKind, number>>;
+  };
+  readonly interactions: {
+    readonly total: number;
+    readonly byType: Readonly<Record<InteractionType, number>>;
+  };
+  /** Import lifecycle counts are kept separate from catalog type counts. */
+  readonly lifecycle: Readonly<Record<ArchiveImportStatus, number>>;
+}
+
 export interface CatalogRepository {
   getManagedAccount(): ManagedAccount | null;
   upsertManagedAccount(
@@ -93,4 +115,12 @@ export interface CatalogRepository {
   ): InteractionUpsertResult;
   getInteraction(id: number): Interaction | null;
   countInteractions(accountId: string): number;
+  getCatalogStatus(): CatalogStatusSnapshot;
+  getHighestInteractionId(accountId: string, transaction?: RepositoryTransaction): number | null;
+  selectInteractions(
+    accountId: string,
+    filters: SelectionFilters,
+    catalogCutoffId: number,
+    transaction?: RepositoryTransaction
+  ): readonly CatalogSelectionItem[];
 }

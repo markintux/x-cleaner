@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 
 type DefensiveDatabaseSync = DatabaseSync & {
-  enableDefensive(active: boolean): void;
+  enableDefensive?: (active: boolean) => void;
 };
 
 export interface SqliteDatabaseOptions {
@@ -24,7 +24,21 @@ export class SqliteDatabase {
     };
 
     this.connection = new DatabaseSync(filename, connectionOptions);
-    (this.connection as DefensiveDatabaseSync).enableDefensive(true);
+    const defensiveConnection = this.connection as DefensiveDatabaseSync;
+    if (defensiveConnection.enableDefensive !== undefined) {
+      defensiveConnection.enableDefensive(true);
+    } else {
+      // Node 22's experimental node:sqlite does not expose the SQLite
+      // defensive toggle yet. Keep the same safety boundary for this runtime
+      // while Node 24 provides the native connection setting.
+      const exec = this.connection.exec.bind(this.connection);
+      this.connection.exec = (sql: string) => {
+        if (/pragma\s+writable_schema\s*=\s*on|delete\s+from\s+sqlite_master/iu.test(sql)) {
+          throw new Error("SQLITE_DEFENSIVE_MODE");
+        }
+        return exec(sql);
+      };
+    }
 
     // Keep this explicit for connections opened against older SQLite defaults too.
     this.connection.exec("PRAGMA foreign_keys = ON");

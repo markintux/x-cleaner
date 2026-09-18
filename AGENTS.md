@@ -57,6 +57,8 @@ Read these documents before implementation:
 - Start Ralph only from a clean Git worktree.
 - Use `./scripts/run-ralph.sh`; it selects Node 24 and fixes the gate-2 command to
   `npm run check` before `package.json` exists.
+- The launcher pins implementation and gate-3 verification sessions to
+  `gpt-5.6-terra` with reasoning effort `high`.
 - Ralph and CI must not execute Phase 15 real-account validation. Those tasks are
   human-controlled and remain pending until the owner supplies the Archive and
   separately authorizes each destructive batch.

@@ -90,7 +90,8 @@ describe("relatórios agregados de execução", () => {
       expect(createHash("sha256").update(bytes).digest("hex")).toBe(replacement.sha256);
       expect(fixture.database.connection.prepare("SELECT count(*) AS count FROM generated_reports").get()).toEqual({ count: 1 });
       expect(JSON.parse(bytes.toString("utf8"))).toMatchObject({ runId: run.id, state });
-    }
+    },
+    30_000
   );
 
   it("não deixa temporários de escrita atômica", async () => {

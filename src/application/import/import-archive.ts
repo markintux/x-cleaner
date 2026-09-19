@@ -1,33 +1,20 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat } from "node:fs/promises";
 import { ArchiveSourceError, type ArchiveSource } from "../ports/archive-source.js";
 import type { CatalogRepository } from "../ports/catalog-repository.js";
 import { recordAudit, type AuditLogger } from "../ports/audit-logger.js";
 import type { ArchiveImport, InteractionType, ManagedAccount } from "../../domain/interaction.js";
-import {
-  ArchiveDetector,
-  UnsupportedArchiveError
-} from "../../infrastructure/archive/archive-detector.js";
-import { DirectoryArchiveSource } from "../../infrastructure/archive/directory-archive-source.js";
-import type { DirectoryArchiveSourceOptions } from "../../infrastructure/archive/directory-archive-source.js";
-import {
-  ZipArchiveSource,
-  type ZipArchiveSourceOptions
-} from "../../infrastructure/archive/zip-archive-source.js";
 import type {
+  ArchiveParser,
   ParsedArchive,
   NormalizedArchiveInteraction
-} from "../../infrastructure/archive/ytd/types.js";
-import type { SqliteDatabase } from "../../infrastructure/database/database.js";
-import { SqliteRepositoryTransaction } from "../../infrastructure/database/repository-transaction.js";
+} from "../ports/archive-parser.js";
+import type { RepositoryTransactionRunner } from "../ports/repository-transaction.js";
 
 export interface ImportArchiveOptions {
-  readonly detector?: ArchiveDetector;
   readonly now?: () => string;
   readonly idFactory?: () => string;
   readonly batchSize?: number;
   readonly sourceFactory?: (input: string) => ArchiveSource | Promise<ArchiveSource>;
-  readonly sourceOptions?: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
   readonly auditLogger?: AuditLogger;
 }
 
@@ -47,25 +34,22 @@ export interface ImportArchiveResult {
 
 /** Application service for one complete, atomic extracted-directory import. */
 export class ImportArchive {
-  readonly #detector: ArchiveDetector;
   readonly #now: () => string;
   readonly #idFactory: () => string;
   readonly #batchSize: number;
   readonly #sourceFactory: ((input: string) => ArchiveSource | Promise<ArchiveSource>) | undefined;
-  readonly #sourceOptions: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
   readonly #auditLogger: AuditLogger | undefined;
 
   constructor(
-    private readonly database: SqliteDatabase,
+    private readonly transactions: RepositoryTransactionRunner,
     private readonly catalog: CatalogRepository,
+    private readonly parser: ArchiveParser,
     options: ImportArchiveOptions = {}
   ) {
-    this.#detector = options.detector ?? new ArchiveDetector();
     this.#now = options.now ?? (() => new Date().toISOString());
     this.#idFactory = options.idFactory ?? randomUUID;
     this.#batchSize = options.batchSize ?? 100;
     this.#sourceFactory = options.sourceFactory;
-    this.#sourceOptions = options.sourceOptions ?? {};
     this.#auditLogger = options.auditLogger;
     if (!Number.isSafeInteger(this.#batchSize) || this.#batchSize <= 0) {
       throw new Error("INVALID_IMPORT_BATCH_SIZE");
@@ -74,10 +58,7 @@ export class ImportArchive {
 
   async execute(input: string | ArchiveSource): Promise<ImportArchiveResult> {
     const source =
-      typeof input === "string"
-        ? ((await this.#sourceFactory?.(input)) ??
-          (await sourceFromPath(input, this.#sourceOptions)))
-        : input;
+      typeof input === "string" ? await requireSourceFactory(this.#sourceFactory)(input) : input;
     const importId = this.#idFactory();
     const startedAt = this.#now();
     let sourceSha256 = fallbackFingerprint(source.label);
@@ -96,9 +77,9 @@ export class ImportArchive {
     try {
       validateSource(source);
       sourceSha256 = await source.fingerprint();
-      const detected = await this.#detector.detect(source);
-      adapterKey = detected.adapter.key;
-      parsed = await detected.adapter.parse(source, detected.evidence);
+      const detected = await this.parser.parse(source);
+      adapterKey = detected.adapterKey;
+      parsed = detected.archive;
       const result = this.#commit(source, sourceSha256, adapterKey, importId, startedAt, parsed);
       await recordAudit(this.#auditLogger, {
         event: "archive.import.completed",
@@ -169,8 +150,7 @@ export class ImportArchive {
     const counts = countInteractions(parsed.interactions);
     let result: ImportArchiveResult | undefined;
 
-    this.database.transaction((connection) => {
-      const transaction = new SqliteRepositoryTransaction(connection);
+    this.transactions.run((transaction) => {
       const account = this.catalog.upsertManagedAccount(
         {
           id: accountId,
@@ -258,8 +238,7 @@ export class ImportArchive {
     errorCode: string
   ): ArchiveImport {
     const finishedAt = this.#now();
-    return this.database.transaction((connection) => {
-      const transaction = new SqliteRepositoryTransaction(connection);
+    return this.transactions.run((transaction) => {
       return this.catalog.createArchiveImport(
         {
           id: importId,
@@ -281,12 +260,13 @@ export class ImportArchive {
 }
 
 export async function importArchive(
-  database: SqliteDatabase,
+  transactions: RepositoryTransactionRunner,
   catalog: CatalogRepository,
+  parser: ArchiveParser,
   input: string | ArchiveSource,
   options: ImportArchiveOptions = {}
 ): Promise<ImportArchiveResult> {
-  return new ImportArchive(database, catalog, options).execute(input);
+  return new ImportArchive(transactions, catalog, parser, options).execute(input);
 }
 
 function validateSource(source: ArchiveSource): void {
@@ -301,22 +281,13 @@ function validateSource(source: ArchiveSource): void {
   }
 }
 
-async function sourceFromPath(
-  input: string,
-  options: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions
-): Promise<ArchiveSource> {
-  let stats;
-  try {
-    stats = await lstat(input);
-  } catch {
-    throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
+function requireSourceFactory(
+  factory: ImportArchiveOptions["sourceFactory"]
+): NonNullable<ImportArchiveOptions["sourceFactory"]> {
+  if (factory === undefined) {
+    throw new Error("ARCHIVE_SOURCE_FACTORY_REQUIRED");
   }
-  if (stats.isSymbolicLink()) {
-    throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
-  }
-  if (stats.isDirectory()) return new DirectoryArchiveSource(input, options);
-  if (stats.isFile()) return new ZipArchiveSource(input, options);
-  throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
+  return factory;
 }
 
 function toInteractionWrite(
@@ -347,10 +318,7 @@ function countInteractions(
 }
 
 function sanitizeImportError(error: unknown): string {
-  if (
-    error instanceof UnsupportedArchiveError ||
-    (error instanceof Error && error.message === "UNSUPPORTED_ARCHIVE")
-  ) {
+  if (error instanceof Error && error.message === "UNSUPPORTED_ARCHIVE") {
     return "UNSUPPORTED_ARCHIVE";
   }
   const candidate = error as { code?: unknown; message?: unknown };

@@ -1,7 +1,4 @@
-import type {
-  BrowserLocatorPort,
-  BrowserPagePort
-} from "../../../application/ports/browser-session.js";
+import type { BrowserLocatorPort, BrowserPagePort } from "../browser-session.js";
 import { normalizeAccountHandle } from "../../../domain/account.js";
 import { isDecimalString } from "../../../domain/interaction.js";
 import { isXChallengeUrl, isXLoginUrl, X_SELECTORS, X_TEXT_KEYS } from "./selectors.js";

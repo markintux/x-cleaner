@@ -11,7 +11,7 @@ import { migrations } from "../../../src/infrastructure/database/migrations/inde
 import { SqliteDatabase } from "../../../src/infrastructure/database/database.js";
 import { Migrator } from "../../../src/infrastructure/database/migrator.js";
 import { SqliteCatalogRepository } from "../../../src/infrastructure/database/repositories/sqlite-catalog-repository.js";
-import { createTranslator } from "../../../src/i18n/translator.js";
+import { createCompositionRoot } from "../../../src/composition-root.js";
 
 describe("x-cleaner session", () => {
   const temporaryDirectories: string[] = [];
@@ -30,30 +30,28 @@ describe("x-cleaner session", () => {
     const lines: string[] = [];
     const promptQuestions: string[] = [];
     const output: CliOutput = { writeLine: (message) => lines.push(message) };
-    const program = createProgram({
+    const root = createCompositionRoot({
       output,
-      translator: createTranslator(),
-      session: {
-        createLoginSession: () => ({
-          execute: async () => ({
-            detection: {
-              status: "AUTHENTICATED",
-              outcome: "AUTHENTICATED",
-              state: "AUTHENTICATED",
-              account: { handle: "@Exemplo", xUserId: xUserId("9007199254740993") }
-            },
-            account: { handle: "@Exemplo", xUserId: xUserId("9007199254740993") },
-            profileDirectory: path.join(dataDirectory, "browser-profile")
-          })
-        }),
-        prompt: {
-          confirm: async (question) => {
-            promptQuestions.push(question);
-            return true;
-          }
+      createLoginSession: () => ({
+        execute: async () => ({
+          detection: {
+            status: "AUTHENTICATED",
+            outcome: "AUTHENTICATED",
+            state: "AUTHENTICATED",
+            account: { handle: "@Exemplo", xUserId: xUserId("9007199254740993") }
+          },
+          account: { handle: "@Exemplo", xUserId: xUserId("9007199254740993") },
+          profileDirectory: path.join(dataDirectory, "browser-profile")
+        })
+      }),
+      sessionPrompt: {
+        confirm: async (question) => {
+          promptQuestions.push(question);
+          return true;
         }
       }
     });
+    const program = createProgram(root.dependencies);
     program.exitOverride();
 
     await program.parseAsync(["session", "login", "--data-dir", dataDirectory], { from: "user" });
@@ -79,16 +77,14 @@ describe("x-cleaner session", () => {
     const dataDirectory = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-session-"));
     temporaryDirectories.push(dataDirectory);
     const lines: string[] = [];
-    const program = createProgram({
+    const root = createCompositionRoot({
       output: { writeLine: (message) => lines.push(message) },
-      translator: createTranslator(),
-      session: {
-        createLoginSession: () => ({
-          execute: async () => authenticatedResult(dataDirectory, "conta")
-        }),
-        prompt: { confirm: async () => false }
-      }
+      createLoginSession: () => ({
+        execute: async () => authenticatedResult(dataDirectory, "conta")
+      }),
+      sessionPrompt: { confirm: async () => false }
     });
+    const program = createProgram(root.dependencies);
     program.exitOverride();
 
     await program.parseAsync(["session", "login", "--data-dir", dataDirectory], { from: "user" });
@@ -118,16 +114,14 @@ describe("x-cleaner session", () => {
     database.close();
 
     const lines: string[] = [];
-    const program = createProgram({
+    const root = createCompositionRoot({
       output: { writeLine: (message) => lines.push(message) },
-      translator: createTranslator(),
-      session: {
-        createLoginSession: () => ({
-          execute: async () => authenticatedResult(dataDirectory, "conta_b", "222")
-        }),
-        prompt: { confirm: async () => true }
-      }
+      createLoginSession: () => ({
+        execute: async () => authenticatedResult(dataDirectory, "conta_b", "222")
+      }),
+      sessionPrompt: { confirm: async () => true }
     });
+    const program = createProgram(root.dependencies);
     program.exitOverride();
 
     await expect(
@@ -162,11 +156,11 @@ describe("x-cleaner session", () => {
       preservedFiles.map((file) => writeFile(path.join(dataDirectory, file), file))
     );
     const lines: string[] = [];
-    const program = createProgram({
+    const root = createCompositionRoot({
       output: { writeLine: (message) => lines.push(message) },
-      translator: createTranslator(),
-      session: { prompt: { confirm: async () => true } }
+      sessionPrompt: { confirm: async () => true }
     });
+    const program = createProgram(root.dependencies);
     program.exitOverride();
 
     await program.parseAsync(["session", "clear", "--data-dir", dataDirectory], { from: "user" });

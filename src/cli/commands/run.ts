@@ -6,10 +6,8 @@ import { CreateRun } from "../../application/runs/create-run.js";
 import { ExecuteBatch } from "../../application/runs/execute-batch.js";
 import { RecoverRun } from "../../application/runs/recover-run.js";
 import type { DetectedAccount } from "../../domain/account.js";
-import { LoginSession } from "../../application/session/login-session.js";
 import {
   openCliRepositories,
-  createConfirmedBrowserEngine,
   type CliDependencies,
   type CliRepositories,
   resolveCliDataDirectory
@@ -150,8 +148,10 @@ async function executeCommand(
       dependencies.run?.createBrowserEngine?.({
         dataDirectory,
         confirmedHandle: run.boundHandle
-      }) ??
-      createConfirmedBrowserEngine(dataDirectory, run.boundHandle);
+      });
+    if (engine === undefined) {
+      throw new Error("ENGINE_NOT_CONFIGURED");
+    }
     const executionOptions = {
       ...(commandClock === undefined ? {} : { clock: commandClock }),
       delay: dependencies.run?.delay ?? dependencies.delay ?? new SystemDelay()
@@ -255,11 +255,7 @@ async function resolveCurrentAccount(
     }
     throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
   }
-  const result = await new LoginSession({ dataDirectory }).execute();
-  if (result.account === null) {
-    throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
-  }
-  return result.account;
+  throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
 }
 
 function parseLimit(value: string | number | undefined): number | null {

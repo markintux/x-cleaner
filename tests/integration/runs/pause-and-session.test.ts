@@ -98,34 +98,8 @@ describe("pausas seguras e restauração de sessão", () => {
       state: "AUTHENTICATED" as const,
       account: { handle: "restored-owner", xUserId: null }
     };
-    const context = {
-      profileDirectory: "/tmp/synthetic-profile",
-      async launch() {
-        return {
-          async newPage() {
-            return {
-              async goto() {
-                return undefined;
-              },
-              url() {
-                return "https://x.com/home";
-              },
-              locator() {
-                throw new Error("not used");
-              }
-            };
-          },
-          async close() {
-            return undefined;
-          }
-        };
-      }
-    };
     const session = await new LoginSession({
-      dataDirectory: "/tmp/synthetic-data",
-      contextFactory: context,
-      timeoutMs: 0,
-      accountPageFactory: () => ({ detect: async () => detection })
+      login: async () => ({ detection, profileDirectory: "/tmp/synthetic-profile" })
     }).execute();
     expect(session.account).toEqual({ handle: "restored-owner", xUserId: null });
     expect("password" in session).toBe(false);

@@ -1,6 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import path from "node:path";
-
 import { resolveApplicationDataDirectory } from "../platform/application-data.js";
 import type { CatalogRepository } from "../application/ports/catalog-repository.js";
 import type { CleanerEngine } from "../application/ports/cleaner-engine.js";
@@ -23,27 +20,18 @@ import type { LoginSessionResult } from "../application/session/login-session.js
 import type { PlanRepository } from "../application/ports/plan-repository.js";
 import type { ReportRepository } from "../application/ports/report-repository.js";
 import type { AuditLogger } from "../application/ports/audit-logger.js";
+import type { ArchiveParser } from "../application/ports/archive-parser.js";
+import type { ArchiveSource } from "../application/ports/archive-source.js";
+import type { RepositoryTransactionRunner } from "../application/ports/repository-transaction.js";
 import type { Translator } from "../i18n/translator.js";
 import type { DetectedAccount } from "../domain/account.js";
 import type { RunReport } from "../application/reports/generate-run-report.js";
-import type { ArchiveDetector } from "../infrastructure/archive/archive-detector.js";
-import type { ImportArchiveOptions } from "../application/import/import-archive.js";
 import type { ExecuteBatchSignal } from "../application/runs/execute-batch.js";
-import { migrations } from "../infrastructure/database/migrations/index.js";
-import { SqliteDatabase } from "../infrastructure/database/database.js";
-import { Migrator } from "../infrastructure/database/migrator.js";
-import { SqliteCatalogRepository } from "../infrastructure/database/repositories/sqlite-catalog-repository.js";
-import { SqlitePlanRepository } from "../infrastructure/database/repositories/sqlite-plan-repository.js";
-import { SqliteRunRepository } from "../infrastructure/database/repositories/sqlite-run-repository.js";
-import { SqliteAuditRepository } from "../infrastructure/database/repositories/sqlite-audit-repository.js";
-import { SqliteReportRepository } from "../infrastructure/database/repositories/sqlite-report-repository.js";
-import { NdjsonLogger } from "../infrastructure/logging/ndjson-logger.js";
-import { UnitOfWork } from "../infrastructure/database/unit-of-work.js";
-import { ExecutorLock } from "../infrastructure/lock/executor-lock.js";
-import {
-  BrowserCleanerEngine,
-  type BrowserCleanerEngineOptions
-} from "../infrastructure/browser/browser-cleaner-engine.js";
+
+export interface BrowserEngineOptions {
+  readonly dataDirectory: string;
+  readonly confirmedHandle: string;
+}
 
 export interface CliOutput {
   writeLine(message: string): void;
@@ -62,12 +50,12 @@ export interface CliReportWriter {
 }
 
 export interface CliArchiveDependencies {
-  readonly detector?: ArchiveDetector;
-  readonly sourceFactory?: ImportArchiveOptions["sourceFactory"];
+  readonly parser: ArchiveParser;
+  readonly sourceFactory: (input: string) => ArchiveSource | Promise<ArchiveSource>;
 }
 
 export interface CliRepositories {
-  readonly database: SqliteDatabase;
+  readonly transactions: RepositoryTransactionRunner;
   readonly catalog: CatalogRepository;
   readonly plans: PlanRepository;
   readonly runs?: RunRepository;
@@ -89,7 +77,7 @@ export interface RunCliDependencies {
   readonly delay?: Delay;
   readonly lock?: ExecutorLockPort;
   readonly signalFactory?: (runId: string) => CliSignalAdapter;
-  readonly createBrowserEngine?: (options: BrowserCleanerEngineOptions) => CleanerEngine;
+  readonly createBrowserEngine?: (options: BrowserEngineOptions) => CleanerEngine;
 }
 
 export interface SessionPrompt {
@@ -160,33 +148,7 @@ export async function openCliRepositories(
     return dependencies.repositories;
   }
 
-  await mkdir(dataDirectory, { recursive: true });
-  const database = new SqliteDatabase(path.join(dataDirectory, "state.sqlite"));
-  const now = dependencies.clock?.now.bind(dependencies.clock);
-  const migratorOptions = now === undefined ? {} : { now };
-  new Migrator(database, migratorOptions).migrate(migrations);
-  const catalogOptions = now === undefined ? {} : { now };
-  const catalog = new SqliteCatalogRepository(database, catalogOptions);
-  const plans = new SqlitePlanRepository(database);
-  const runs = new SqliteRunRepository(database, catalogOptions);
-  const audit = new SqliteAuditRepository(database);
-  const reports = new SqliteReportRepository(database);
-  const lockOptions = now === undefined ? {} : { now };
-  return {
-    database,
-    catalog,
-    plans,
-    runs,
-    audit,
-    reports,
-    auditLogger:
-      dependencies.auditLogger ??
-      dependencies.auditLoggerFactory?.(dataDirectory) ??
-      new NdjsonLogger(dataDirectory),
-    unitOfWork: new UnitOfWork(database, runs, audit),
-    lock: new ExecutorLock(dataDirectory, lockOptions),
-    close: () => database.close()
-  };
+  throw new Error("REPOSITORY_FACTORY_NOT_CONFIGURED");
 }
 
 export const consoleOutput: CliOutput = {
@@ -200,15 +162,3 @@ export const consoleErrorOutput: CliOutput = {
     process.stderr.write(`${message}\n`);
   }
 };
-
-/**
- * Creates the real browser boundary for a confirmed destructive run only.
- * The constructor is lazy with respect to Playwright; the context is launched
- * by the engine on the first item after Core has accepted the batch.
- */
-export function createConfirmedBrowserEngine(
-  dataDirectory: string,
-  confirmedHandle: string
-): CleanerEngine {
-  return new BrowserCleanerEngine({ dataDirectory, confirmedHandle });
-}

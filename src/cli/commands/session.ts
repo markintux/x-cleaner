@@ -4,14 +4,11 @@ import {
   AccountConfirmationError,
   ConfirmAccount
 } from "../../application/session/confirm-account.js";
-import { ClearSession } from "../../application/session/clear-session.js";
-import { LoginSession } from "../../application/session/login-session.js";
 import { normalizeAccountHandle, type AccountDetection } from "../../domain/account.js";
 import type { CliDependencies, CliRepositories, SessionPrompt } from "../dependencies.js";
 import { openCliRepositories, resolveCliDataDirectory } from "../dependencies.js";
 import { recordAudit } from "../../application/ports/audit-logger.js";
 import { createHash } from "node:crypto";
-import { NdjsonLogger } from "../../infrastructure/logging/ndjson-logger.js";
 import { ReadlinePrompt } from "../prompt.js";
 
 export interface SessionCommandOptions {
@@ -52,16 +49,14 @@ async function runLogin(
   options: SessionCommandOptions
 ): Promise<void> {
   const dataDirectory = resolveDataDirectory(dependencies, options);
-  const auditLogger =
-    dependencies.auditLogger ??
-    dependencies.auditLoggerFactory?.(dataDirectory) ??
-    new NdjsonLogger(dataDirectory);
+  const auditLogger = dependencies.auditLogger ?? dependencies.auditLoggerFactory?.(dataDirectory);
   const now = dependencies.clock?.now.bind(dependencies.clock) ?? defaultNow;
   dependencies.output.writeLine(dependencies.translator.translate("session.localGuidance"));
   dependencies.output.writeLine(dependencies.translator.translate("session.loginStarted"));
 
-  const loginSession = await (dependencies.session?.createLoginSession?.(dataDirectory) ??
-    new LoginSession({ dataDirectory }));
+  const loginSessionFactory = dependencies.session?.createLoginSession;
+  if (loginSessionFactory === undefined) throw new Error("SESSION_SERVICE_NOT_CONFIGURED");
+  const loginSession = await loginSessionFactory(dataDirectory);
   const result = await loginSession.execute();
   await recordAudit(auditLogger, {
     event: "account.detected",
@@ -170,11 +165,7 @@ async function runClear(
   options: SessionCommandOptions
 ): Promise<void> {
   const dataDirectory = resolveDataDirectory(dependencies, options);
-  const auditLogger =
-    dependencies.auditLogger ??
-    dependencies.auditLoggerFactory?.(dataDirectory) ??
-    new NdjsonLogger(dataDirectory);
-  const now = dependencies.clock?.now.bind(dependencies.clock) ?? defaultNow;
+  const auditLogger = dependencies.auditLogger ?? dependencies.auditLoggerFactory?.(dataDirectory);
   dependencies.output.writeLine(dependencies.translator.translate("session.clearGuidance"));
   const prompt = dependencies.session?.prompt ?? resolveSessionPrompt(dependencies);
   const confirmed = await prompt.confirm(
@@ -185,10 +176,9 @@ async function runClear(
     return;
   }
 
-  const result = await (dependencies.session?.clearSession?.({
-    dataDirectory,
-    confirmed: true
-  }) ?? new ClearSession(now).execute({ dataDirectory, confirmed: true }));
+  const clearSession = dependencies.session?.clearSession;
+  if (clearSession === undefined) throw new Error("SESSION_SERVICE_NOT_CONFIGURED");
+  const result = await clearSession({ dataDirectory, confirmed: true });
   await recordAudit(auditLogger, {
     event: "session.cleared",
     timestamp: result.clearedAt,

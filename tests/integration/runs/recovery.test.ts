@@ -313,7 +313,7 @@ describe("recuperação de runs", () => {
         output: { writeLine: (message) => output.push(message) },
         translator: createTranslator(),
         repositories: {
-          database: fixture.database,
+          transactions: fixture.transactions,
           catalog: fixture.catalog,
           plans: fixture.plans,
           runs: fixture.runs,

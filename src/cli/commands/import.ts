@@ -24,10 +24,10 @@ export function createImportCommand(
     const repositories = await openRepositories(dependencies, dataDirectory);
     try {
       const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
+      if (dependencies.archive === undefined) {
+        throw new Error("ARCHIVE_SERVICES_NOT_CONFIGURED");
+      }
       const importOptions: ImportArchiveOptions = {
-        ...(dependencies.archive?.detector === undefined
-          ? {}
-          : { detector: dependencies.archive.detector }),
         ...(dependencies.archive?.sourceFactory === undefined
           ? {}
           : { sourceFactory: dependencies.archive.sourceFactory }),
@@ -37,8 +37,9 @@ export function createImportCommand(
         ...(auditLogger === undefined ? {} : { auditLogger })
       };
       const result = await new ImportArchive(
-        repositories.database,
+        repositories.transactions,
         repositories.catalog,
+        dependencies.archive.parser,
         importOptions
       ).execute(input);
       dependencies.output.writeLine(dependencies.translator.translate("import.completed"));

@@ -1,7 +1,8 @@
-import { lstat } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
+import path from "node:path";
 
 import { ArchiveSourceError, type ArchiveSource } from "./application/ports/archive-source.js";
-import type { BrowserContextFactoryPort } from "./application/ports/browser-session.js";
+import type { BrowserContextFactoryPort } from "./infrastructure/browser/browser-session.js";
 import type { CleanerEngine } from "./application/ports/cleaner-engine.js";
 import type { Clock } from "./application/ports/clock.js";
 import type { Delay } from "./application/ports/delay.js";
@@ -15,16 +16,30 @@ import { ConfirmAccount } from "./application/session/confirm-account.js";
 import { ClearSession } from "./application/session/clear-session.js";
 import { LoginSession, type LoginSessionResult } from "./application/session/login-session.js";
 import { ArchiveDetector } from "./infrastructure/archive/archive-detector.js";
+import { DetectedArchiveParser } from "./infrastructure/archive/archive-parser.js";
 import { DirectoryArchiveSource } from "./infrastructure/archive/directory-archive-source.js";
 import { YtdArchiveAdapter } from "./infrastructure/archive/adapters/ytd-archive-adapter.js";
 import { ZipArchiveSource } from "./infrastructure/archive/zip-archive-source.js";
 import { BrowserContextFactory } from "./infrastructure/browser/browser-context-factory.js";
+import { XLoginGateway } from "./infrastructure/browser/x-login-gateway.js";
+import { FileSystemSessionStorage } from "./infrastructure/browser/file-system-session-storage.js";
 import {
   BrowserCleanerEngine,
   type BrowserCleanerEngineOptions
 } from "./infrastructure/browser/browser-cleaner-engine.js";
 import { JsonReportWriter } from "./infrastructure/reports/json-report-writer.js";
 import { NdjsonLogger } from "./infrastructure/logging/ndjson-logger.js";
+import { migrations } from "./infrastructure/database/migrations/index.js";
+import { SqliteDatabase } from "./infrastructure/database/database.js";
+import { Migrator } from "./infrastructure/database/migrator.js";
+import { SqliteRepositoryTransactionRunner } from "./infrastructure/database/repository-transaction.js";
+import { SqliteCatalogRepository } from "./infrastructure/database/repositories/sqlite-catalog-repository.js";
+import { SqlitePlanRepository } from "./infrastructure/database/repositories/sqlite-plan-repository.js";
+import { SqliteRunRepository } from "./infrastructure/database/repositories/sqlite-run-repository.js";
+import { SqliteAuditRepository } from "./infrastructure/database/repositories/sqlite-audit-repository.js";
+import { SqliteReportRepository } from "./infrastructure/database/repositories/sqlite-report-repository.js";
+import { UnitOfWork } from "./infrastructure/database/unit-of-work.js";
+import { ExecutorLock } from "./infrastructure/lock/executor-lock.js";
 import { ProcessSignalAdapter } from "./platform/process-signals.js";
 import { SystemDelay } from "./platform/delay.js";
 import { createTranslator, type Translator } from "./i18n/translator.js";
@@ -33,9 +48,9 @@ import {
   consoleOutput,
   type CliDependencies,
   type CliOutput,
+  type CliRepositories,
   type CliSignalAdapter,
-  type SessionPrompt,
-  openCliRepositories
+  type SessionPrompt
 } from "./cli/dependencies.js";
 import { ReadlinePrompt } from "./cli/prompt.js";
 import { createProgram } from "./cli/create-program.js";
@@ -110,10 +125,9 @@ export function createCompositionRoot(options: CompositionRootOptions = {}): Com
 
   const createLoginSession = async (dataDirectory: string) =>
     options.createLoginSession?.(dataDirectory) ??
-    new LoginSession({
-      dataDirectory,
-      contextFactory: createBrowserContextFactory(dataDirectory)
-    });
+    new LoginSession(
+      new XLoginGateway({ contextFactory: createBrowserContextFactory(dataDirectory) })
+    );
 
   const dependencies: CliDependencies = {
     output,
@@ -127,28 +141,17 @@ export function createCompositionRoot(options: CompositionRootOptions = {}): Com
     prompt,
     auditLoggerFactory: (dataDirectory) => new NdjsonLogger(dataDirectory),
     archive: {
-      detector,
+      parser: new DetectedArchiveParser(detector),
       sourceFactory: createArchiveSource
     },
-    repositoryFactory: (dataDirectory) =>
-      openCliRepositories(
-        {
-          output,
-          errorOutput,
-          translator,
-          clock,
-          delay,
-          auditLoggerFactory: (directory) => new NdjsonLogger(directory)
-        },
-        dataDirectory
-      ),
+    repositoryFactory: (dataDirectory) => openRepositories(dataDirectory, clock),
     session: {
       prompt: sessionPrompt,
       createLoginSession,
       confirmAccount: (catalog, input: ConfirmAccountInput): ConfirmedAccountResult =>
         new ConfirmAccount(catalog, { now: clock.now.bind(clock) }).execute(input),
       clearSession: (input: ClearSessionInput): Promise<ClearSessionResult> =>
-        new ClearSession(clock.now.bind(clock)).execute(input)
+        new ClearSession(new FileSystemSessionStorage(), clock.now.bind(clock)).execute(input)
     },
     reportWriterFactory: (dataDirectory, reports) =>
       new JsonReportWriter(dataDirectory, {
@@ -189,6 +192,30 @@ async function createArchiveSource(input: string): Promise<ArchiveSource> {
   if (stats.isDirectory()) return new DirectoryArchiveSource(input);
   if (stats.isFile()) return new ZipArchiveSource(input);
   throw new ArchiveSourceError("ARCHIVE_SOURCE_INVALID");
+}
+
+async function openRepositories(dataDirectory: string, clock: Clock): Promise<CliRepositories> {
+  await mkdir(dataDirectory, { recursive: true });
+  const database = new SqliteDatabase(path.join(dataDirectory, "state.sqlite"));
+  const now = clock.now.bind(clock);
+  new Migrator(database, { now }).migrate(migrations);
+  const catalog = new SqliteCatalogRepository(database, { now });
+  const plans = new SqlitePlanRepository(database);
+  const runs = new SqliteRunRepository(database, { now });
+  const audit = new SqliteAuditRepository(database);
+  const reports = new SqliteReportRepository(database);
+  return {
+    transactions: new SqliteRepositoryTransactionRunner(database),
+    catalog,
+    plans,
+    runs,
+    audit,
+    reports,
+    auditLogger: new NdjsonLogger(dataDirectory),
+    unitOfWork: new UnitOfWork(database, runs, audit),
+    lock: new ExecutorLock(dataDirectory, { now }),
+    close: () => database.close()
+  };
 }
 
 function isSessionPrompt(value: Prompt): value is Prompt & SessionPrompt {

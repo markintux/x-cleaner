@@ -11,8 +11,7 @@ import {
   type SelectionInput
 } from "../../domain/selection.js";
 import type { CleaningPlan, CleaningPlanItem } from "../../domain/plan.js";
-import type { SqliteDatabase } from "../../infrastructure/database/database.js";
-import { SqliteRepositoryTransaction } from "../../infrastructure/database/repository-transaction.js";
+import type { RepositoryTransactionRunner } from "../ports/repository-transaction.js";
 
 export interface CreateCleaningPlanInput extends SelectionInput {
   readonly accountId?: string;
@@ -41,7 +40,7 @@ export class CreateCleaningPlan {
   readonly #idFactory: () => string;
 
   constructor(
-    private readonly database: SqliteDatabase,
+    private readonly transactions: RepositoryTransactionRunner,
     private readonly catalog: CatalogRepository,
     private readonly plans: PlanRepository,
     options: CreateCleaningPlanOptions = {}
@@ -63,8 +62,7 @@ export class CreateCleaningPlan {
 
     const now = this.#now();
     let result: CreatedCleaningPlan | undefined;
-    this.database.transaction((connection) => {
-      const transaction = new SqliteRepositoryTransaction(connection);
+    this.transactions.run((transaction) => {
       const catalogCutoffId = this.catalog.getHighestInteractionId(accountId, transaction);
       if (catalogCutoffId === null) {
         throw new SelectionValidationError("SELECTION_EMPTY");
@@ -114,11 +112,11 @@ export class CreateCleaningPlan {
 }
 
 export function createCleaningPlan(
-  database: SqliteDatabase,
+  transactions: RepositoryTransactionRunner,
   catalog: CatalogRepository,
   plans: PlanRepository,
   input: CreateCleaningPlanInput,
   options: CreateCleaningPlanOptions = {}
 ): CreatedCleaningPlan {
-  return new CreateCleaningPlan(database, catalog, plans, options).execute(input);
+  return new CreateCleaningPlan(transactions, catalog, plans, options).execute(input);
 }

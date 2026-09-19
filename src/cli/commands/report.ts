@@ -1,5 +1,4 @@
 import { GenerateRunReport } from "../../application/reports/generate-run-report.js";
-import { JsonReportWriter } from "../../infrastructure/reports/json-report-writer.js";
 import {
   openCliRepositories,
   type CliDependencies,
@@ -30,14 +29,8 @@ export function createReportCommand(
         throw new Error("REPORT_REPOSITORIES_NOT_CONFIGURED");
       }
       const report = new GenerateRunReport({ runs: repositories.runs }).execute(runId);
-      const writer =
-        dependencies.reportWriterFactory?.(dataDirectory, repositories.reports) ??
-        new JsonReportWriter(dataDirectory, {
-          ...(repositories.reports === undefined ? {} : { reports: repositories.reports }),
-          ...(dependencies.clock === undefined
-            ? {}
-            : { now: dependencies.clock.now.bind(dependencies.clock) })
-        });
+      const writer = dependencies.reportWriterFactory?.(dataDirectory, repositories.reports);
+      if (writer === undefined) throw new Error("REPORT_WRITER_NOT_CONFIGURED");
       const written = await writer.write(report);
       const renderer = new ProgressRenderer({ translator: dependencies.translator });
       const progress: RunProgress = {

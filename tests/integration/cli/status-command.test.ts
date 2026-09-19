@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createProgram } from "../../../src/cli/create-program.js";
 import type { CliOutput } from "../../../src/cli/dependencies.js";
-import { createTranslator } from "../../../src/i18n/translator.js";
+import { createCompositionRoot } from "../../../src/composition-root.js";
 
 describe("x-cleaner status", () => {
   const temporaryDirectories: string[] = [];
@@ -29,7 +29,8 @@ describe("x-cleaner status", () => {
     globalThis.fetch = networkRequest;
 
     try {
-      const program = createProgram({ output, translator: createTranslator() });
+      const root = createCompositionRoot({ output });
+      const program = createProgram(root.dependencies);
       program.exitOverride();
 
       await program.parseAsync(["status", "--data-dir", dataDirectory], { from: "user" });

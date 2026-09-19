@@ -1,4 +1,4 @@
-import type { BrowserPagePort } from "../../../application/ports/browser-session.js";
+import type { BrowserPagePort } from "../browser-session.js";
 import {
   normalizeAccountHandle,
   type AccountDetection,

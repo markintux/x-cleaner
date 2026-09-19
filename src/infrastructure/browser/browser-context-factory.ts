@@ -2,13 +2,13 @@ import { mkdir } from "node:fs/promises";
 
 import { chromium, type BrowserContext, type BrowserType } from "playwright";
 
-import type { BrowserContextFactoryPort } from "../../application/ports/browser-session.js";
-import { dedicatedBrowserProfileDirectory } from "../../application/session/session-path.js";
+import type { BrowserContextFactoryPort } from "./browser-session.js";
+import { dedicatedBrowserProfileDirectory } from "./session-path.js";
 
 export {
   BROWSER_PROFILE_DIRECTORY_NAME,
   dedicatedBrowserProfileDirectory
-} from "../../application/session/session-path.js";
+} from "./session-path.js";
 
 export interface BrowserContextFactoryOptions {
   readonly dataDirectory: string;

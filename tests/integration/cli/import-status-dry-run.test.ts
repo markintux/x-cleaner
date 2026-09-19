@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createProgram } from "../../../src/cli/create-program.js";
 import type { CliOutput } from "../../../src/cli/dependencies.js";
-import { createTranslator } from "../../../src/i18n/translator.js";
+import { createCompositionRoot } from "../../../src/composition-root.js";
 
 const syntheticFixture = path.resolve("tests/fixtures/x-archive/synthetic");
 const emptyFixture = path.resolve("tests/fixtures/x-archive/empty");
@@ -71,7 +71,8 @@ describe("import, status e dry-run", () => {
     });
     const lines: string[] = [];
     const output: CliOutput = { writeLine: (line) => lines.push(line) };
-    const program = createProgram({ output, translator: createTranslator(), cleanerEngine });
+    const root = createCompositionRoot({ output });
+    const program = createProgram({ ...root.dependencies, cleanerEngine });
     program.exitOverride();
     await program.parseAsync(
       ["dry-run", "--data-dir", dataDirectory, "--type", "POST", "--type", "REPLY"],
@@ -109,10 +110,8 @@ describe("import, status e dry-run", () => {
     expect(importOutput.join("\n")).toContain("Nenhuma interação compatível");
 
     const lines: string[] = [];
-    const program = createProgram({
-      output: { writeLine: (line) => lines.push(line) },
-      translator: createTranslator()
-    });
+    const root = createCompositionRoot({ output: { writeLine: (line) => lines.push(line) } });
+    const program = createProgram(root.dependencies);
     program.exitOverride();
     await expect(
       program.parseAsync(["dry-run", "--data-dir", dataDirectory, "--type", "POST"], {
@@ -129,10 +128,8 @@ describe("import, status e dry-run", () => {
     const invalidArchive = path.join(workspace, "not-an-archive.zip");
     await writeFile(invalidArchive, "synthetic invalid archive", "utf8");
     const lines: string[] = [];
-    const program = createProgram({
-      output: { writeLine: (line) => lines.push(line) },
-      translator: createTranslator()
-    });
+    const root = createCompositionRoot({ output: { writeLine: (line) => lines.push(line) } });
+    const program = createProgram(root.dependencies);
     program.exitOverride();
 
     await expect(
@@ -152,7 +149,8 @@ describe("import, status e dry-run", () => {
 async function runCli(arguments_: readonly string[]): Promise<readonly string[]> {
   const lines: string[] = [];
   const output: CliOutput = { writeLine: (line) => lines.push(line) };
-  const program = createProgram({ output, translator: createTranslator() });
+  const root = createCompositionRoot({ output });
+  const program = createProgram(root.dependencies);
   program.exitOverride();
   await program.parseAsync([...arguments_], { from: "user" });
   return lines;

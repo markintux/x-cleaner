@@ -35,7 +35,7 @@ export function createDryRunCommand(
         to: options.to ?? null
       };
       const result = createCleaningPlan(
-        repositories.database,
+        repositories.transactions,
         repositories.catalog,
         repositories.plans,
         input,

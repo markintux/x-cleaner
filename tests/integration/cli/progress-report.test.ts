@@ -7,6 +7,7 @@ import { ProgressRenderer } from "../../../src/cli/progress-renderer.js";
 import type { CliOutput } from "../../../src/cli/dependencies.js";
 import { createTranslator } from "../../../src/i18n/translator.js";
 import { SqliteReportRepository } from "../../../src/infrastructure/database/repositories/sqlite-report-repository.js";
+import { JsonReportWriter } from "../../../src/infrastructure/reports/json-report-writer.js";
 import {
   addInteraction,
   createDatabaseFixture,
@@ -158,13 +159,15 @@ describe("saída de progresso e relatório", () => {
         output,
         translator: createTranslator(),
         repositories: {
-          database: fixture.database,
+          transactions: fixture.transactions,
           catalog: fixture.catalog,
           plans: fixture.plans,
           runs: fixture.runs,
           audit: fixture.audit,
           reports: new SqliteReportRepository(fixture.database)
-        }
+        },
+        reportWriterFactory: (dataDirectory, reports) =>
+          new JsonReportWriter(dataDirectory, { reports })
       });
       program.exitOverride();
       await program.parseAsync(["report", run.id, "--data-dir", fixture.directory], {

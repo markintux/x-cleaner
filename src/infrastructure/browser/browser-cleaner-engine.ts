@@ -2,7 +2,7 @@ import type {
   BrowserContextFactoryPort,
   BrowserContextPort,
   BrowserPagePort
-} from "../../application/ports/browser-session.js";
+} from "./browser-session.js";
 import type {
   CleanerEngine,
   CleanerEngineInteraction,

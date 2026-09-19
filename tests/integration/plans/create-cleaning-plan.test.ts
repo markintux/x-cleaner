@@ -30,7 +30,7 @@ describe("createCleaningPlan", () => {
       addCatalogItem(fixture, accountId, importId, "4", "LIKE", null);
 
       const created = createCleaningPlan(
-        fixture.database,
+        fixture.transactions,
         fixture.catalog,
         fixture.plans,
         {
@@ -82,7 +82,7 @@ describe("createCleaningPlan", () => {
       addCatalogItem(fixture, accountId, importId, "1", "LIKE", null);
 
       expect(() =>
-        createCleaningPlan(fixture.database, fixture.catalog, fixture.plans, {
+        createCleaningPlan(fixture.transactions, fixture.catalog, fixture.plans, {
           accountId,
           types: ["POST"]
         })

@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import { ImportArchive } from "../../../src/application/import/import-archive.js";
 import { DirectoryArchiveSource } from "../../../src/infrastructure/archive/directory-archive-source.js";
-import type { ArchiveDetector } from "../../../src/infrastructure/archive/archive-detector.js";
 import { createDatabaseFixture, fixedNow } from "../../support/database.js";
+import { createArchiveParser, createArchiveSource } from "../../support/archive.js";
 
 const syntheticFixture = path.resolve("tests/fixtures/x-archive/synthetic");
 const emptyFixture = path.resolve("tests/fixtures/x-archive/empty");
@@ -19,10 +19,16 @@ describe("importação de diretório X Archive", () => {
     try {
       const before = await snapshotFiles(sourceDirectory);
       const ids = ["import-1", "account-1", "import-2"];
-      const importer = new ImportArchive(fixture.database, fixture.catalog, {
-        now: () => fixedNow,
-        idFactory: () => ids.shift() ?? "unexpected-id"
-      });
+      const importer = new ImportArchive(
+        fixture.transactions,
+        fixture.catalog,
+        createArchiveParser(),
+        {
+          sourceFactory: createArchiveSource,
+          now: () => fixedNow,
+          idFactory: () => ids.shift() ?? "unexpected-id"
+        }
+      );
 
       const first = await importer.execute(sourceDirectory);
       const second = await importer.execute(sourceDirectory);
@@ -74,10 +80,16 @@ describe("importação de diretório X Archive", () => {
     const sourceDirectory = await copyFixture(emptyFixture);
     const fixture = await createDatabaseFixture();
     try {
-      const importer = new ImportArchive(fixture.database, fixture.catalog, {
-        now: () => fixedNow,
-        idFactory: () => "empty-import"
-      });
+      const importer = new ImportArchive(
+        fixture.transactions,
+        fixture.catalog,
+        createArchiveParser(),
+        {
+          sourceFactory: createArchiveSource,
+          now: () => fixedNow,
+          idFactory: () => "empty-import"
+        }
+      );
       const result = await importer.execute(sourceDirectory);
 
       expect(result.totalCount).toBe(0);
@@ -95,10 +107,16 @@ describe("importação de diretório X Archive", () => {
     await writeFile(path.join(sourceDirectory, "random.js"), "console.log('synthetic');\n", "utf8");
     const fixture = await createDatabaseFixture();
     try {
-      const importer = new ImportArchive(fixture.database, fixture.catalog, {
-        now: () => fixedNow,
-        idFactory: () => "unsupported-import"
-      });
+      const importer = new ImportArchive(
+        fixture.transactions,
+        fixture.catalog,
+        createArchiveParser(),
+        {
+          sourceFactory: createArchiveSource,
+          now: () => fixedNow,
+          idFactory: () => "unsupported-import"
+        }
+      );
 
       await expect(importer.execute(sourceDirectory)).rejects.toThrow("UNSUPPORTED_ARCHIVE");
       expect(
@@ -121,37 +139,34 @@ describe("importação de diretório X Archive", () => {
     const sourceDirectory = await copyFixture(syntheticFixture);
     const fixture = await createDatabaseFixture();
     try {
-      const fakeDetector = {
-        detect: async () => ({
-          adapter: {
-            key: "synthetic-test-adapter",
-            parse: async () => ({
-              account: { xUserId: "90071992547409931234", handle: "synthetic_owner" },
-              interactions: [
-                {
-                  xInteractionId: "901" as never,
-                  type: "POST" as const,
-                  interactionCreatedAt: null,
-                  contentPreview: null,
-                  sourceRelativePath: "safe.js",
-                  sourceRecordKey: "0"
-                },
-                {
-                  xInteractionId: "902" as never,
-                  type: "REPLY" as const,
-                  interactionCreatedAt: null,
-                  contentPreview: null,
-                  sourceRelativePath: "../outside.js",
-                  sourceRecordKey: "1"
-                }
-              ]
-            })
-          },
-          evidence: []
+      const fakeParser = {
+        parse: async () => ({
+          adapterKey: "synthetic-test-adapter",
+          archive: {
+            account: { xUserId: "90071992547409931234", handle: "synthetic_owner" },
+            interactions: [
+              {
+                xInteractionId: "901" as never,
+                type: "POST" as const,
+                interactionCreatedAt: null,
+                contentPreview: null,
+                sourceRelativePath: "safe.js",
+                sourceRecordKey: "0"
+              },
+              {
+                xInteractionId: "902" as never,
+                type: "REPLY" as const,
+                interactionCreatedAt: null,
+                contentPreview: null,
+                sourceRelativePath: "../outside.js",
+                sourceRecordKey: "1"
+              }
+            ]
+          }
         })
-      } as unknown as ArchiveDetector;
-      const importer = new ImportArchive(fixture.database, fixture.catalog, {
-        detector: fakeDetector,
+      };
+      const importer = new ImportArchive(fixture.transactions, fixture.catalog, fakeParser, {
+        sourceFactory: createArchiveSource,
         now: () => fixedNow,
         idFactory: () => "rollback-import"
       });

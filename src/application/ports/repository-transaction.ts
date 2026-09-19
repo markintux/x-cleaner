@@ -5,3 +5,8 @@
 export interface RepositoryTransaction {
   readonly kind: "REPOSITORY_TRANSACTION";
 }
+
+/** Runs an application write inside an infrastructure-owned transaction. */
+export interface RepositoryTransactionRunner {
+  run<Result>(operation: (transaction: RepositoryTransaction) => Result): Result;
+}

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { ImportArchive } from "../../../src/application/import/import-archive.js";
 import { ZipArchiveSource } from "../../../src/infrastructure/archive/zip-archive-source.js";
 import { createDatabaseFixture, fixedNow } from "../../support/database.js";
+import { createArchiveParser, createArchiveSource } from "../../support/archive.js";
 
 const syntheticFixture = path.resolve("tests/fixtures/x-archive/synthetic");
 
@@ -22,13 +23,19 @@ describe("importação segura de ZIP", () => {
       await cp(syntheticFixture, directory, { recursive: true });
       await writeZipFromDirectory(directory, zipPath, true);
       const before = await readFile(zipPath);
-      const importer = new ImportArchive(fixture.database, fixture.catalog, {
-        now: () => fixedNow,
-        idFactory: (() => {
-          const ids = ["directory-import", "directory-account", "zip-import"];
-          return () => ids.shift() ?? "unexpected-id";
-        })()
-      });
+      const importer = new ImportArchive(
+        fixture.transactions,
+        fixture.catalog,
+        createArchiveParser(),
+        {
+          sourceFactory: createArchiveSource,
+          now: () => fixedNow,
+          idFactory: (() => {
+            const ids = ["directory-import", "directory-account", "zip-import"];
+            return () => ids.shift() ?? "unexpected-id";
+          })()
+        }
+      );
 
       const directoryResult = await importer.execute(directory);
       const zipResult = await importer.execute(zipPath);
@@ -174,10 +181,16 @@ describe("importação segura de ZIP", () => {
     const fixture = await createDatabaseFixture();
     try {
       await writeFile(zipPath, Buffer.from("synthetic-not-a-zip", "utf8"));
-      const importer = new ImportArchive(fixture.database, fixture.catalog, {
-        now: () => fixedNow,
-        idFactory: () => "malformed-import"
-      });
+      const importer = new ImportArchive(
+        fixture.transactions,
+        fixture.catalog,
+        createArchiveParser(),
+        {
+          sourceFactory: createArchiveSource,
+          now: () => fixedNow,
+          idFactory: () => "malformed-import"
+        }
+      );
       await expect(importer.execute(zipPath)).rejects.toThrow("ARCHIVE_MALFORMED");
       expect(
         fixture.database.connection

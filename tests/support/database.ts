@@ -9,6 +9,7 @@ import { SqliteDatabase } from "../../src/infrastructure/database/database.js";
 import { migrations } from "../../src/infrastructure/database/migrations/index.js";
 import { Migrator } from "../../src/infrastructure/database/migrator.js";
 import { SqliteAuditRepository } from "../../src/infrastructure/database/repositories/sqlite-audit-repository.js";
+import { SqliteRepositoryTransactionRunner } from "../../src/infrastructure/database/repository-transaction.js";
 import { SqliteCatalogRepository } from "../../src/infrastructure/database/repositories/sqlite-catalog-repository.js";
 import { SqlitePlanRepository } from "../../src/infrastructure/database/repositories/sqlite-plan-repository.js";
 import { SqliteRunRepository } from "../../src/infrastructure/database/repositories/sqlite-run-repository.js";
@@ -19,6 +20,7 @@ export const digest = "a".repeat(64);
 export interface DatabaseFixture {
   readonly directory: string;
   readonly database: SqliteDatabase;
+  readonly transactions: SqliteRepositoryTransactionRunner;
   readonly catalog: SqliteCatalogRepository;
   readonly plans: SqlitePlanRepository;
   readonly runs: SqliteRunRepository;
@@ -34,6 +36,7 @@ export async function createDatabaseFixture(): Promise<DatabaseFixture> {
   return {
     directory,
     database,
+    transactions: new SqliteRepositoryTransactionRunner(database),
     catalog,
     plans: new SqlitePlanRepository(database),
     runs: new SqliteRunRepository(database, { now: () => fixedNow }),

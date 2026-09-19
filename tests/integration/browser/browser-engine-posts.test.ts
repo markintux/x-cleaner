@@ -177,7 +177,7 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
       const postId = addInteraction(fixture, accountId, importId, 1, "POST");
       const replyId = addInteraction(fixture, accountId, importId, 2, "REPLY");
       const plan = createCleaningPlan(
-        fixture.database,
+        fixture.transactions,
         fixture.catalog,
         fixture.plans,
         { accountId, types: ["REPLY"] },

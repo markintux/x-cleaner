@@ -25,7 +25,7 @@ describe("BrowserCleanerEngine para REPOST e LIKE", () => {
   afterAll(async () => {
     await context?.close();
     await browser?.close();
-  });
+  }, 30_000);
 
   it.each([
     [

@@ -47,7 +47,7 @@ describe("AccountPage em fixtures HTML locais", () => {
 
   afterAll(async () => {
     await browser?.close();
-  });
+  }, 30_000);
 
   async function accountPage(fixture: string): Promise<AccountPage> {
     await page.setContent(fixture, { waitUntil: "domcontentloaded" });

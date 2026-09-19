@@ -38,7 +38,7 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
   afterAll(async () => {
     await context?.close();
     await browser?.close();
-  });
+  }, 30_000);
 
   it.each(["POST", "REPLY"] as const)("delega a exclusão para %s", async (type) => {
     await page.route("http://local.test/status/123", async (route) => {

@@ -21,7 +21,7 @@ describe("PostPage em páginas locais semânticas", () => {
 
   afterAll(async () => {
     await browser?.close();
-  });
+  }, 30_000);
 
   async function load(html: string): Promise<PostPage> {
     await page.setContent(html, { waitUntil: "domcontentloaded" });

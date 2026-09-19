@@ -21,7 +21,7 @@ describe("RepostPage em páginas locais semânticas", () => {
 
   afterAll(async () => {
     await browser?.close();
-  });
+  }, 30_000);
 
   it("prova o status, desfaz apenas o repost e nunca clica em excluir publicação", async () => {
     await page.setContent(`

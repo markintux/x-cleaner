@@ -114,16 +114,18 @@ async function collectPackagePaths(root) {
     return { paths: [], error: null };
   }
 
-  const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
+  const npmExecutable = "npm";
   const result = spawnSync(npmExecutable, ["pack", "--dry-run", "--json", "--ignore-scripts"], {
     cwd: root,
     encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
+    stdio: ["ignore", "pipe", "pipe"],
+    shell: process.platform === "win32"
   });
   if (result.status !== 0) {
+    const details = result.stderr ?? result.stdout ?? result.error?.message ?? "";
     return {
       paths: [],
-      error: `npm pack falhou: ${(result.stderr || result.stdout).trim() || "erro desconhecido"}`
+      error: `npm pack falhou: ${String(details).trim() || "erro desconhecido"}`
     };
   }
 

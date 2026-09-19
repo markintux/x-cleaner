@@ -21,7 +21,7 @@ describe("LikePage em páginas locais semânticas", () => {
 
   afterAll(async () => {
     await browser?.close();
-  });
+  }, 30_000);
 
   it("remove a curtida uma única vez e confirma o estado", async () => {
     await page.setContent(`

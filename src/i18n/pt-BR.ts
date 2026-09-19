@@ -87,5 +87,20 @@ export const ptBR: MessageCatalog = {
   "session.clearQuestion": "Remover o perfil dedicado da sessão? [s/N]",
   "session.clearCanceled": "Limpeza da sessão cancelada; nenhum arquivo foi removido.",
   "session.cleared": "Dados da sessão removidos com segurança.",
-  "session.clearProfile": "Perfil removido: {profileDirectory}"
+  "session.clearProfile": "Perfil removido: {profileDirectory}",
+  "cli.reportDescription": "gera ou atualiza o relatório local de uma execução",
+  "progress.header": "Progresso da execução ({state}):",
+  "progress.type":
+    "{type}: concluídos {completed}; restantes {remaining}; ignorados {skipped}; terminais sem erro {terminal}; falhos {failed}; tentativas {retry}",
+  "progress.total":
+    "Total {total}: concluídos {completed}; restantes {remaining}; ignorados {skipped}; terminais sem erro {terminal}; falhos {failed}; pausados {paused}; tentativas {retry}",
+  "progress.pause": "Pausa registrada: {reason}.",
+  "report.generated": "Relatório local gerado para a execução {runId}.",
+  "report.path": "Caminho local relativo: {path}",
+  "report.state": "Estado: {state}",
+  "report.total":
+    "Total: {total}; concluídos: {completed}; restantes: {remaining}; ignorados: {skipped}; terminais sem erro: {terminal}; falhos: {failed}; pausados: {paused}; tentativas: {retry}",
+  "report.type":
+    "{type}: total {total}; concluídos {completed}; restantes {remaining}; ignorados {skipped}; terminais sem erro {terminal}; falhos {failed}; tentativas {retry}",
+  "report.failure": "Falha sanitizada: {failure}"
 };

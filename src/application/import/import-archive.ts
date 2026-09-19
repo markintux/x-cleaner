@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { ArchiveSourceError, type ArchiveSource } from "../ports/archive-source.js";
 import type { CatalogRepository } from "../ports/catalog-repository.js";
+import { recordAudit, type AuditLogger } from "../ports/audit-logger.js";
 import type { ArchiveImport, InteractionType, ManagedAccount } from "../../domain/interaction.js";
 import {
   ArchiveDetector,
@@ -27,6 +28,7 @@ export interface ImportArchiveOptions {
   readonly batchSize?: number;
   readonly sourceFactory?: (directory: string) => ArchiveSource;
   readonly sourceOptions?: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
+  readonly auditLogger?: AuditLogger;
 }
 
 export interface ImportArchiveResult {
@@ -51,6 +53,7 @@ export class ImportArchive {
   readonly #batchSize: number;
   readonly #sourceFactory: ((input: string) => ArchiveSource) | undefined;
   readonly #sourceOptions: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
+  readonly #auditLogger: AuditLogger | undefined;
 
   constructor(
     private readonly database: SqliteDatabase,
@@ -63,6 +66,7 @@ export class ImportArchive {
     this.#batchSize = options.batchSize ?? 100;
     this.#sourceFactory = options.sourceFactory;
     this.#sourceOptions = options.sourceOptions ?? {};
+    this.#auditLogger = options.auditLogger;
     if (!Number.isSafeInteger(this.#batchSize) || this.#batchSize <= 0) {
       throw new Error("INVALID_IMPORT_BATCH_SIZE");
     }
@@ -79,13 +83,37 @@ export class ImportArchive {
     let adapterKey = "unknown";
     let parsed: ParsedArchive | null = null;
 
+    await recordAudit(this.#auditLogger, {
+      event: "archive.import.started",
+      timestamp: startedAt,
+      importId,
+      sourceKind: source.kind,
+      sourceLabel: safeAuditSourceLabel(source.label),
+      adapterKey
+    });
+
     try {
       validateSource(source);
       sourceSha256 = await source.fingerprint();
       const detected = await this.#detector.detect(source);
       adapterKey = detected.adapter.key;
       parsed = await detected.adapter.parse(source, detected.evidence);
-      return this.#commit(source, sourceSha256, adapterKey, importId, startedAt, parsed);
+      const result = this.#commit(source, sourceSha256, adapterKey, importId, startedAt, parsed);
+      await recordAudit(this.#auditLogger, {
+        event: "archive.import.completed",
+        timestamp: result.archiveImport.finishedAt ?? this.#now(),
+        importId: result.archiveImport.id,
+        sourceKind: source.kind,
+        adapterKey: result.adapterKey,
+        posts: result.postsCount,
+        replies: result.repliesCount,
+        reposts: result.repostsCount,
+        likes: result.likesCount,
+        inserted: result.insertedCount,
+        reused: result.reusedCount,
+        updated: result.updatedCount
+      });
+      return result;
     } catch (error) {
       const errorCode = sanitizeImportError(error);
       const failedImport = this.#recordFailure(
@@ -96,6 +124,14 @@ export class ImportArchive {
         startedAt,
         errorCode
       );
+      await recordAudit(this.#auditLogger, {
+        event: "archive.import.failed",
+        timestamp: failedImport.finishedAt ?? this.#now(),
+        importId: failedImport.id,
+        sourceKind: source.kind,
+        adapterKey,
+        errorCode
+      });
       // The failed metadata is useful audit state, but no parsed interaction is
       // ever written outside the successful transaction above.
       void parsed;
@@ -356,6 +392,10 @@ function isSanitizedErrorCode(value: string): boolean {
     "UNSUPPORTED_ARCHIVE",
     "ARCHIVE_IMPORT_FAILED"
   ]).has(value);
+}
+
+function safeAuditSourceLabel(value: string): string {
+  return /^[A-Za-z]:|[\\/]/u.test(value) ? "untrusted-source" : value;
 }
 
 function fallbackFingerprint(label: string): string {

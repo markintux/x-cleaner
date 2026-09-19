@@ -14,6 +14,7 @@ import { FakePrompt } from "../../support/fake-prompt.js";
 import { createTranslator } from "../../../src/i18n/translator.js";
 import { UnitOfWork } from "../../../src/infrastructure/database/unit-of-work.js";
 import { ExecutorLock } from "../../../src/infrastructure/lock/executor-lock.js";
+import { NdjsonLogger } from "../../../src/infrastructure/logging/ndjson-logger.js";
 
 describe("CLI run", () => {
   it("mostra aviso e handle, aceita somente APAGAR, respeita limite e não oferece bypass", async () => {
@@ -36,11 +37,13 @@ describe("CLI run", () => {
       const prompt = new FakePrompt(["APAGAR"]);
       const account = { handle: managed.archiveHandle!, xUserId: managed.xUserId };
       const engine = new FakeCleanerEngine([{ kind: "COMPLETED", outcome: "COMPLETED" }]);
+      const auditLogger = new NdjsonLogger(fixture.directory);
       const program = createProgram({
         output: { writeLine: (line) => outputLines.push(line) } satisfies CliOutput,
         translator: createTranslator(),
         repositoryFactory: () => ({
           ...fixture,
+          auditLogger,
           unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
           lock: new ExecutorLock(fixture.directory),
           close: () => undefined
@@ -56,6 +59,12 @@ describe("CLI run", () => {
       expect(prompt.questions.join("\n")).toContain("Confirmação");
       expect(engine.calls).toHaveLength(1);
       expect(program.helpInformation()).not.toMatch(/--(?:yes|force|skip-confirm|no-confirm)/iu);
+      const audit = await import("node:fs/promises").then(({ readFile }) =>
+        readFile(auditLogger.outputPath, "utf8")
+      );
+      for (const event of ["run.confirmation.succeeded", "interaction.attempted", "run.paused"]) {
+        expect(audit).toContain(`"event":"${event}"`);
+      }
     } finally {
       await fixture.cleanup();
     }
@@ -80,11 +89,13 @@ describe("CLI run", () => {
       const outputLines: string[] = [];
       const prompt = new FakePrompt([""]);
       const account = { handle: managed.archiveHandle!, xUserId: managed.xUserId };
+      const auditLogger = new NdjsonLogger(fixture.directory);
       const dependencies = {
         output: { writeLine: (line: string) => outputLines.push(line) },
         translator: createTranslator(),
         repositoryFactory: () => ({
           ...fixture,
+          auditLogger,
           unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
           lock: new ExecutorLock(fixture.directory),
           close: () => undefined
@@ -96,6 +107,10 @@ describe("CLI run", () => {
       await program.parseAsync(["run", plan.id, "--data-dir", fixture.directory], { from: "user" });
       expect(engine.calls).toHaveLength(0);
       expect(outputLines.join("\n")).toContain("cancelada");
+      const audit = await import("node:fs/promises").then(({ readFile }) =>
+        readFile(auditLogger.outputPath, "utf8")
+      );
+      expect(audit).toContain('"event":"run.confirmation.failed"');
 
       const mismatchProgram = createProgram({
         ...dependencies,

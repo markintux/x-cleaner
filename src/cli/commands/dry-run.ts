@@ -1,5 +1,6 @@
 import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import { createCleaningPlan } from "../../application/plans/create-cleaning-plan.js";
+import { recordAudit } from "../../application/ports/audit-logger.js";
 import { SelectionValidationError, type SelectionInput } from "../../domain/selection.js";
 import type { InteractionType } from "../../domain/interaction.js";
 import {
@@ -49,6 +50,26 @@ export function createDryRunCommand(
         result.plan.catalogCutoffId
       );
       const actualCounts = countPlanItems(result.items, selectedRows);
+      const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
+      await recordAudit(auditLogger, {
+        event: "plan.created",
+        timestamp: result.plan.createdAt,
+        planId: result.plan.id,
+        filters: {
+          types: result.types,
+          from: result.filters.fromAt,
+          to: result.filters.toAt
+        },
+        countsByType: actualCounts,
+        total: result.items.length
+      });
+      await recordAudit(auditLogger, {
+        event: "plan.previewed",
+        timestamp: result.plan.reviewedAt,
+        planId: result.plan.id,
+        countsByType: actualCounts,
+        total: result.items.length
+      });
       dependencies.output.writeLine(dependencies.translator.translate("dryRun.notice"));
       dependencies.output.writeLine(dependencies.translator.translate("dryRun.noMutation"));
       dependencies.output.writeLine(

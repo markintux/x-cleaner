@@ -1,5 +1,6 @@
 import type { CleanerEngine, CleanerEngineOutcome } from "../ports/cleaner-engine.js";
 import type { Clock } from "../ports/clock.js";
+import { recordAudit, type AuditLogger } from "../ports/audit-logger.js";
 import type { Delay } from "../ports/delay.js";
 import type { ExecutionUnitOfWork } from "../ports/execution-unit-of-work.js";
 import type { ExecutorLockPort } from "../ports/executor-lock.js";
@@ -55,6 +56,7 @@ export interface ExecuteBatchDependencies {
   readonly unitOfWork: ExecutionUnitOfWork;
   readonly lock?: ExecutorLockPort;
   readonly engine?: CleanerEngine;
+  readonly auditLogger?: AuditLogger;
 }
 
 export interface ExecuteBatchResult {
@@ -256,6 +258,17 @@ export class ExecuteBatch {
               : {}),
             checkpoint
           });
+          await recordAudit(this.dependencies.auditLogger, {
+            event: "interaction.attempted",
+            timestamp: finishedAt,
+            runId: run.id,
+            interactionId: interaction?.xInteractionId ?? null,
+            type: interaction?.type ?? null,
+            attemptNumber,
+            outcome: outcome.outcome,
+            durationMs: outcome.durationMs ?? 0,
+            errorCode: errorCodeForOutcome(outcome)
+          });
           resolveCurrentBoundary();
 
           if (paused) {
@@ -299,6 +312,20 @@ export class ExecuteBatch {
       if (finalRun === null || finalBatch === null) {
         throw new Error("EXECUTION_RESULT_MISSING");
       }
+      const progressEvent =
+        finalRun.status === "PAUSED"
+          ? { event: "run.paused", reason: finalRun.pauseReason }
+          : finalRun.status === "INTERRUPTED"
+            ? { event: "run.interrupted" }
+            : finalRun.status === "FAILED"
+              ? { event: "run.failed" }
+              : { event: "run.completed" };
+      await recordAudit(this.dependencies.auditLogger, {
+        ...progressEvent,
+        timestamp: finalRun.finishedAt ?? this.#now(),
+        runId: finalRun.id,
+        aggregateCounts: aggregateCounts(this.dependencies.runs.listRunItems(run.id))
+      });
       return { run: finalRun, batch: finalBatch, processedCount, engineCalls };
     } finally {
       await lease.release();

@@ -45,6 +45,17 @@ describe("import, status e dry-run", () => {
     expect(statusOutput.join("\n")).toContain("Catálogo: 4 interações");
     expect(statusOutput.join("\n")).toContain("LIKE: 1");
     expect(statusOutput.join("\n")).not.toContain("synthetic original post");
+    const audit = await readFile(path.join(dataDirectory, "logs/audit.ndjson"), "utf8");
+    const events = audit
+      .trimEnd()
+      .split("\n")
+      .map((line) => (JSON.parse(line) as { event: string }).event);
+    expect(events).toEqual([
+      "archive.import.started",
+      "archive.import.completed",
+      "archive.import.started",
+      "archive.import.completed"
+    ]);
   });
 
   it("exibe SIMULAÇÃO, salva o plano e nunca chama um cleaner engine", async () => {
@@ -74,6 +85,17 @@ describe("import, status e dry-run", () => {
     expect(lines.join("\n")).toContain("Total selecionado: 2");
     expect(lines.join("\n")).toMatch(/Plano imutável: \S+/u);
     expect(cleanerEngine).not.toHaveBeenCalled();
+    const audit = await readFile(path.join(dataDirectory, "logs/audit.ndjson"), "utf8");
+    const events = audit
+      .trimEnd()
+      .split("\n")
+      .map((line) => (JSON.parse(line) as { event: string }).event);
+    expect(events).toEqual([
+      "archive.import.started",
+      "archive.import.completed",
+      "plan.created",
+      "plan.previewed"
+    ]);
   });
 
   it("trata arquivo vazio como sucesso e recusa dry-run sem itens", async () => {
@@ -98,6 +120,32 @@ describe("import, status e dry-run", () => {
       })
     ).rejects.toThrow("SELECTION_EMPTY");
     expect(lines.join("\n").toLowerCase()).toContain("nenhuma interação corresponde");
+  });
+
+  it("registra falha de importação sem serializar o caminho absoluto", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-phase-6-import-failed-"));
+    temporaryDirectories.push(workspace);
+    const dataDirectory = path.join(workspace, "data");
+    const invalidArchive = path.join(workspace, "not-an-archive.zip");
+    await writeFile(invalidArchive, "synthetic invalid archive", "utf8");
+    const lines: string[] = [];
+    const program = createProgram({
+      output: { writeLine: (line) => lines.push(line) },
+      translator: createTranslator()
+    });
+    program.exitOverride();
+
+    await expect(
+      program.parseAsync(["import", invalidArchive, "--data-dir", dataDirectory], {
+        from: "user"
+      })
+    ).rejects.toThrow();
+
+    const audit = await readFile(path.join(dataDirectory, "logs/audit.ndjson"), "utf8");
+    expect(audit).toContain('"event":"archive.import.started"');
+    expect(audit).toContain('"event":"archive.import.failed"');
+    expect(audit).not.toContain(invalidArchive);
+    expect(lines.join("\n")).toContain("Importação não concluída");
   });
 });
 

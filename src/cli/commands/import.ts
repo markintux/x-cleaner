@@ -24,9 +24,13 @@ export function createImportCommand(
     );
     const repositories = await openRepositories(dependencies, dataDirectory);
     try {
-      const result = await new ImportArchive(repositories.database, repositories.catalog).execute(
-        input
-      );
+      const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
+      const importOptions = auditLogger === undefined ? {} : { auditLogger };
+      const result = await new ImportArchive(
+        repositories.database,
+        repositories.catalog,
+        importOptions
+      ).execute(input);
       dependencies.output.writeLine(dependencies.translator.translate("import.completed"));
       dependencies.output.writeLine(
         dependencies.translator.translate("import.adapter", { adapter: result.adapterKey })

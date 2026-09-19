@@ -20,6 +20,8 @@ import type {
 } from "../application/session/clear-session.js";
 import type { LoginSessionResult } from "../application/session/login-session.js";
 import type { PlanRepository } from "../application/ports/plan-repository.js";
+import type { ReportRepository } from "../application/ports/report-repository.js";
+import type { AuditLogger } from "../application/ports/audit-logger.js";
 import type { Translator } from "../i18n/translator.js";
 import type { DetectedAccount } from "../domain/account.js";
 import { migrations } from "../infrastructure/database/migrations/index.js";
@@ -29,6 +31,8 @@ import { SqliteCatalogRepository } from "../infrastructure/database/repositories
 import { SqlitePlanRepository } from "../infrastructure/database/repositories/sqlite-plan-repository.js";
 import { SqliteRunRepository } from "../infrastructure/database/repositories/sqlite-run-repository.js";
 import { SqliteAuditRepository } from "../infrastructure/database/repositories/sqlite-audit-repository.js";
+import { SqliteReportRepository } from "../infrastructure/database/repositories/sqlite-report-repository.js";
+import { NdjsonLogger } from "../infrastructure/logging/ndjson-logger.js";
 import { UnitOfWork } from "../infrastructure/database/unit-of-work.js";
 import { ExecutorLock } from "../infrastructure/lock/executor-lock.js";
 import {
@@ -46,6 +50,8 @@ export interface CliRepositories {
   readonly plans: PlanRepository;
   readonly runs?: RunRepository;
   readonly audit?: AuditRepository;
+  readonly reports?: ReportRepository;
+  readonly auditLogger?: AuditLogger;
   readonly unitOfWork?: ExecutionUnitOfWork;
   readonly lock?: ExecutorLockPort;
   readonly close?: () => void;
@@ -99,6 +105,7 @@ export interface CliDependencies {
     dataDirectory: string
   ) => CliRepositories | Promise<CliRepositories>;
   readonly session?: SessionCliDependencies;
+  readonly auditLogger?: AuditLogger;
 }
 
 export async function openCliRepositories(
@@ -119,12 +126,15 @@ export async function openCliRepositories(
   const plans = new SqlitePlanRepository(database);
   const runs = new SqliteRunRepository(database);
   const audit = new SqliteAuditRepository(database);
+  const reports = new SqliteReportRepository(database);
   return {
     database,
     catalog,
     plans,
     runs,
     audit,
+    reports,
+    auditLogger: dependencies.auditLogger ?? new NdjsonLogger(dataDirectory),
     unitOfWork: new UnitOfWork(database, runs, audit),
     lock: new ExecutorLock(dataDirectory),
     close: () => database.close()

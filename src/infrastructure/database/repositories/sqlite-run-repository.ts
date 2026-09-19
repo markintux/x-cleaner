@@ -13,6 +13,8 @@ import type {
   RunBatch,
   RunBatchStatus
 } from "../../../domain/run.js";
+import type { InteractionType } from "../../../domain/interaction.js";
+import type { RunProgressRow } from "../../../application/progress/get-run-progress.js";
 import type { SqliteDatabase } from "../database.js";
 import { connectionFor } from "../repository-transaction.js";
 
@@ -98,6 +100,37 @@ export class SqliteRunRepository implements RunRepository {
       .prepare("SELECT * FROM cleaning_run_items WHERE run_id = ? ORDER BY sequence")
       .all(runId)
       .map((row) => mapRunItem(row as Row));
+  }
+
+  /**
+   * Progress projection deliberately excludes interaction content and source
+   * paths. The scheduler index supplies lifecycle ordering while the join only
+   * reads the normalized interaction type.
+   */
+  getRunProgressRows(runId: string): readonly RunProgressRow[] {
+    return this.database.connection
+      .prepare(
+        `SELECT interactions.type AS interaction_type, cleaning_run_items.status,
+                cleaning_run_items.attempt_count, cleaning_run_items.next_retry_at
+         FROM cleaning_run_items
+         INNER JOIN interactions ON interactions.id = cleaning_run_items.interaction_id
+         WHERE cleaning_run_items.run_id = ?
+         ORDER BY cleaning_run_items.sequence`
+      )
+      .all(runId)
+      .map((row) => {
+        const value = row as Row;
+        return {
+          type: requiredString(value.interaction_type) as InteractionType,
+          status: requiredString(value.status) as RunProgressRow["status"],
+          attemptCount: requiredNumber(value.attempt_count),
+          nextRetryAt: nullableString(value.next_retry_at)
+        };
+      });
+  }
+
+  getRunProgress(runId: string): readonly RunProgressRow[] {
+    return this.getRunProgressRows(runId);
   }
 
   createBatch(batch: RunBatch, transaction?: RepositoryTransaction): void {

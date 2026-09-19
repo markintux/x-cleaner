@@ -1,4 +1,5 @@
 import type { CleaningRun, CleaningRunItem, RunBatch } from "../../domain/run.js";
+import type { RunProgressRow } from "../progress/get-run-progress.js";
 import type { RepositoryTransaction } from "./repository-transaction.js";
 
 export interface EligibleRunItemPage {
@@ -21,6 +22,8 @@ export interface RunRepository {
   getRunForPlan(planId: string): CleaningRun | null;
   getRunItem(runItemId: number): CleaningRunItem | null;
   listRunItems(runId: string): readonly CleaningRunItem[];
+  /** Lightweight projection for progress/reporting; it must not select content. */
+  getRunProgressRows?(runId: string): readonly RunProgressRow[];
   createBatch(batch: RunBatch, transaction?: RepositoryTransaction): void;
   getBatch(batchId: string): RunBatch | null;
   pageEligibleItems(

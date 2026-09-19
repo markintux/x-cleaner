@@ -22,6 +22,9 @@ import type { CleanerEngine } from "../../application/ports/cleaner-engine.js";
 import type { ExecuteBatchResult } from "../../application/runs/execute-batch.js";
 import { ProcessSignals } from "../../platform/process-signals.js";
 import { systemDelay } from "../../platform/delay.js";
+import { GetRunProgress } from "../../application/progress/get-run-progress.js";
+import { ProgressRenderer } from "../progress-renderer.js";
+import { recordAudit } from "../../application/ports/audit-logger.js";
 
 export interface RunCommandOptions {
   readonly dataDir?: string;
@@ -59,6 +62,7 @@ async function executeCommand(
   const repositories = await openCliRepositories(dependencies, dataDirectory);
   try {
     const services = requireRunRepositories(repositories);
+    const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
     const limit = parseLimit(options.limit);
     let account: DetectedAccount | undefined;
     let run;
@@ -87,6 +91,11 @@ async function executeCommand(
         throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
       }
       assertAccountMatchesRun(run.boundHandle, account);
+      await recordAudit(auditLogger, {
+        event: "run.resumed",
+        timestamp: new Date().toISOString(),
+        runId: run.id
+      });
     }
     if (account === undefined) {
       throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
@@ -103,6 +112,7 @@ async function executeCommand(
     const confirmationOptions = dependencies.run?.clock ? { clock: dependencies.run.clock } : {};
     const localizedConfirmationOptions = {
       ...confirmationOptions,
+      ...(auditLogger === undefined ? {} : { auditLogger }),
       messages: {
         types: (summary: BatchConfirmationSummary) =>
           dependencies.translator.translate("run.typeCounts", {
@@ -162,13 +172,20 @@ async function executeCommand(
           audit: services.audit,
           unitOfWork: services.unitOfWork,
           lock,
-          engine
+          engine,
+          ...(auditLogger === undefined ? {} : { auditLogger })
         },
         { ...executionOptions, signal: signals }
       ).execute({ runId: run.id, batchId: confirmation.batch.id, account });
     } finally {
       uninstallSignals();
       await closeEngine(engine);
+    }
+    const progress = new GetRunProgress(services.runs).execute(result.run.id);
+    for (const line of new ProgressRenderer({ translator: dependencies.translator }).render(
+      progress
+    )) {
+      dependencies.output.writeLine(line);
     }
     if (result.run.status === "PAUSED") {
       dependencies.output.writeLine(

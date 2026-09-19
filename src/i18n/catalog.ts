@@ -73,7 +73,18 @@ export const messageKeys = [
   "session.clearQuestion",
   "session.clearCanceled",
   "session.cleared",
-  "session.clearProfile"
+  "session.clearProfile",
+  "cli.reportDescription",
+  "progress.header",
+  "progress.type",
+  "progress.total",
+  "progress.pause",
+  "report.generated",
+  "report.path",
+  "report.state",
+  "report.total",
+  "report.type",
+  "report.failure"
 ] as const;
 
 export type MessageKey = (typeof messageKeys)[number];

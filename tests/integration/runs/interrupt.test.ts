@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import { ExecuteBatch } from "../../../src/application/runs/execute-batch.js";
@@ -5,6 +7,7 @@ import type { ExecutionUnitOfWork } from "../../../src/application/ports/executi
 import { ProcessSignals } from "../../../src/platform/process-signals.js";
 import type { SignalSource } from "../../../src/platform/process-signals.js";
 import { ExecutorLock } from "../../../src/infrastructure/lock/executor-lock.js";
+import { NdjsonLogger } from "../../../src/infrastructure/logging/ndjson-logger.js";
 import { UnitOfWork } from "../../../src/infrastructure/database/unit-of-work.js";
 import {
   addInteraction,
@@ -174,6 +177,71 @@ describe("interrupção segura", () => {
       expect(
         fixture.runs.pageEligibleItems(runId, fixedNow, 10).items.map((item) => item.interactionId)
       ).toEqual([interactionIds[1], interactionIds[2]]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("produz o evento de interrupção depois de persistir o checkpoint", async () => {
+    const fixture = await createDatabaseFixture();
+    try {
+      const { accountId, importId } = seedCatalog(fixture, "16");
+      const managed = fixture.catalog.getManagedAccount()!;
+      fixture.catalog.upsertManagedAccount({
+        ...managed,
+        confirmedHandle: managed.archiveHandle,
+        confirmedAt: fixedNow
+      });
+      const interactionId = addInteraction(fixture, accountId, importId, 1);
+      const plan = createPlan(fixture, accountId, [interactionId]);
+      const runId = "run-audited-interrupt";
+      const batchId = "batch-audited-interrupt";
+      fixture.runs.createRun({
+        id: runId,
+        planId: plan.id,
+        accountId,
+        boundHandle: "synthetic-16",
+        status: "PENDING",
+        pauseReason: null,
+        startedAt: null,
+        pausedAt: null,
+        finishedAt: null,
+        createdAt: fixedNow,
+        updatedAt: fixedNow
+      });
+      fixture.runs.createBatch({
+        id: batchId,
+        runId,
+        requestedLimit: null,
+        confirmedAt: fixedNow,
+        status: "RUNNING",
+        startedAt: fixedNow,
+        finishedAt: null,
+        createdAt: fixedNow,
+        updatedAt: fixedNow
+      });
+      const auditLogger = new NdjsonLogger(fixture.directory);
+      const result = await new ExecuteBatch(
+        {
+          plans: fixture.plans,
+          catalog: fixture.catalog,
+          runs: fixture.runs,
+          audit: fixture.audit,
+          unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
+          lock: new ExecutorLock(fixture.directory),
+          engine: new FakeCleanerEngine(),
+          auditLogger
+        },
+        { signal: { isStopRequested: () => true }, clock: { now: () => fixedNow } }
+      ).execute({
+        runId,
+        batchId,
+        account: { handle: "synthetic-16", xUserId: managed.xUserId }
+      });
+
+      expect(result.run.status).toBe("INTERRUPTED");
+      expect(fixture.audit.listCheckpoints(runId)[0]?.reason).toBe("MANUAL_INTERRUPT");
+      expect(await readFile(auditLogger.outputPath, "utf8")).toContain('"event":"run.interrupted"');
     } finally {
       await fixture.cleanup();
     }

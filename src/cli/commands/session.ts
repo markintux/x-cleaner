@@ -13,6 +13,9 @@ import { normalizeAccountHandle, type AccountDetection } from "../../domain/acco
 import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import type { CliDependencies, CliRepositories, SessionPrompt } from "../dependencies.js";
 import { openCliRepositories } from "../dependencies.js";
+import { recordAudit } from "../../application/ports/audit-logger.js";
+import { createHash } from "node:crypto";
+import { NdjsonLogger } from "../../infrastructure/logging/ndjson-logger.js";
 
 export interface SessionCommandOptions {
   readonly dataDir?: string;
@@ -52,12 +55,19 @@ async function runLogin(
   options: SessionCommandOptions
 ): Promise<void> {
   const dataDirectory = resolveDataDirectory(options);
+  const auditLogger = dependencies.auditLogger ?? new NdjsonLogger(dataDirectory);
   dependencies.output.writeLine(dependencies.translator.translate("session.localGuidance"));
   dependencies.output.writeLine(dependencies.translator.translate("session.loginStarted"));
 
   const loginSession = await (dependencies.session?.createLoginSession?.(dataDirectory) ??
     new LoginSession({ dataDirectory }));
   const result = await loginSession.execute();
+  await recordAudit(auditLogger, {
+    event: "account.detected",
+    timestamp: new Date().toISOString(),
+    status: result.detection.status,
+    handle: result.account?.handle ?? null
+  });
   dependencies.output.writeLine(
     dependencies.translator.translate("session.profile", {
       profileDirectory: result.profileDirectory
@@ -96,9 +106,21 @@ async function runLogin(
           confirmed
         });
     if (!confirmation.confirmed) {
+      await recordAudit(auditLogger, {
+        event: "account.rejected",
+        timestamp: new Date().toISOString(),
+        outcome: "CANCELED"
+      });
       dependencies.output.writeLine(dependencies.translator.translate("session.rejected"));
       return;
     }
+    await recordAudit(auditLogger, {
+      event: "account.confirmed",
+      timestamp: confirmation.account?.confirmedAt ?? new Date().toISOString(),
+      handle: normalizedAccount.handle,
+      accountId: confirmation.account?.id ?? null,
+      outcome: "CONFIRMED"
+    });
     dependencies.output.writeLine(
       dependencies.translator.translate("session.confirmed", {
         handle: normalizedAccount.handle
@@ -106,6 +128,11 @@ async function runLogin(
     );
   } catch (error) {
     if (error instanceof AccountConfirmationError && error.code === "ACCOUNT_IDENTITY_MISMATCH") {
+      await recordAudit(auditLogger, {
+        event: "account.rejected",
+        timestamp: new Date().toISOString(),
+        outcome: "IDENTITY_MISMATCH"
+      });
       dependencies.output.writeLine(dependencies.translator.translate("session.identityMismatch"));
     }
     throw error;
@@ -142,6 +169,7 @@ async function runClear(
   options: SessionCommandOptions
 ): Promise<void> {
   const dataDirectory = resolveDataDirectory(options);
+  const auditLogger = dependencies.auditLogger ?? new NdjsonLogger(dataDirectory);
   dependencies.output.writeLine(dependencies.translator.translate("session.clearGuidance"));
   const prompt = dependencies.session?.prompt ?? new ReadlineSessionPrompt();
   const confirmed = await prompt.confirm(
@@ -156,6 +184,11 @@ async function runClear(
     dataDirectory,
     confirmed: true
   }) ?? clearDedicatedSession({ dataDirectory, confirmed: true }));
+  await recordAudit(auditLogger, {
+    event: "session.cleared",
+    timestamp: result.clearedAt,
+    dataDirectoryId: createHash("sha256").update(dataDirectory).digest("hex").slice(0, 16)
+  });
   dependencies.output.writeLine(dependencies.translator.translate("session.cleared"));
   dependencies.output.writeLine(
     dependencies.translator.translate("session.clearProfile", {

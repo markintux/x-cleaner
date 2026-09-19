@@ -5,6 +5,7 @@ import { ExecuteBatch } from "../../../src/application/runs/execute-batch.js";
 import { createResumeCommand } from "../../../src/cli/commands/resume.js";
 import { RetryPolicy } from "../../../src/domain/retry-policy.js";
 import { ExecutorLock } from "../../../src/infrastructure/lock/executor-lock.js";
+import { NdjsonLogger } from "../../../src/infrastructure/logging/ndjson-logger.js";
 import { UnitOfWork } from "../../../src/infrastructure/database/unit-of-work.js";
 import { createTranslator } from "../../../src/i18n/translator.js";
 import type { CleaningRun, RunBatch } from "../../../src/domain/run.js";
@@ -307,6 +308,7 @@ describe("recuperação de runs", () => {
       fixture.runs.updateRunItem(items[1]!.id, { status: "COMPLETED", completedAt: fixedNow });
       const output: string[] = [];
       const engine = new FakeCleanerEngine([{ kind: "COMPLETED", outcome: "COMPLETED" }]);
+      const auditLogger = new NdjsonLogger(fixture.directory);
       const result = await createResumeCommand({
         output: { writeLine: (message) => output.push(message) },
         translator: createTranslator(),
@@ -316,6 +318,7 @@ describe("recuperação de runs", () => {
           plans: fixture.plans,
           runs: fixture.runs,
           audit: fixture.audit,
+          auditLogger,
           unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
           lock: new ExecutorLock(fixture.directory)
         },
@@ -342,6 +345,10 @@ describe("recuperação de runs", () => {
       ]);
       expect(fixture.audit.listCheckpoints(run.id)[0]?.sequence).toBe(1);
       expect(output.some((line) => line.includes("concluído"))).toBe(true);
+      const audit = await import("node:fs/promises").then(({ readFile }) =>
+        readFile(auditLogger.outputPath, "utf8")
+      );
+      expect(audit).toContain('"event":"run.resumed"');
     } finally {
       await fixture.cleanup();
     }

@@ -1,9 +1,12 @@
+import { readFile } from "node:fs/promises";
+
 import { describe, expect, it } from "vitest";
 
 import { ConfirmBatch } from "../../../src/application/runs/confirm-batch.js";
 import { CreateRun } from "../../../src/application/runs/create-run.js";
 import { ExecuteBatch } from "../../../src/application/runs/execute-batch.js";
 import { ExecutorLock } from "../../../src/infrastructure/lock/executor-lock.js";
+import { NdjsonLogger } from "../../../src/infrastructure/logging/ndjson-logger.js";
 import { UnitOfWork } from "../../../src/infrastructure/database/unit-of-work.js";
 import {
   addInteraction,
@@ -48,13 +51,14 @@ describe("execução segura com fake engine", () => {
         now: () => fixedNow,
         idFactory: () => "run-execution"
       }).execute({ planId: plan.id, account: account(fixture) });
+      const auditLogger = new NdjsonLogger(fixture.directory);
       const prompt = new FakePrompt(["APAGAR"]);
       const confirmed = await new ConfirmBatch(
         fixture.plans,
         fixture.catalog,
         fixture.runs,
         prompt,
-        { now: () => fixedNow, idFactory: () => "batch-all" }
+        { now: () => fixedNow, idFactory: () => "batch-all", auditLogger }
       ).execute({ run: created.run, account: account(fixture) });
       expect(confirmed.confirmed).toBe(true);
       const engine = new FakeCleanerEngine([
@@ -70,7 +74,8 @@ describe("execução segura com fake engine", () => {
           audit: fixture.audit,
           unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
           lock: new ExecutorLock(fixture.directory),
-          engine
+          engine,
+          auditLogger
         },
         { clock: new FakeClock(fixedNow) }
       ).execute({ runId: created.run.id, batchId: confirmed.batch!.id, account: account(fixture) });
@@ -86,6 +91,10 @@ describe("execução segura com fake engine", () => {
         fixture.audit.listAttempts(fixture.runs.listRunItems(created.run.id)[0]!.id)
       ).toHaveLength(1);
       expect(fixture.audit.listCheckpoints(created.run.id).length).toBe(4);
+      const audit = await readFile(auditLogger.outputPath, "utf8");
+      expect(audit).toContain('"event":"run.confirmation.succeeded"');
+      expect(audit).toContain('"event":"interaction.attempted"');
+      expect(audit).toContain('"event":"run.completed"');
     } finally {
       await fixture.cleanup();
     }

@@ -4,6 +4,7 @@ import type { CatalogRepository } from "../ports/catalog-repository.js";
 import type { Clock } from "../ports/clock.js";
 import type { PlanRepository } from "../ports/plan-repository.js";
 import type { Prompt } from "../ports/prompt.js";
+import { recordAudit, type AuditLogger } from "../ports/audit-logger.js";
 import type { RunRepository } from "../ports/run-repository.js";
 import type { DetectedAccount } from "../../domain/account.js";
 import { normalizeAccountHandle } from "../../domain/account.js";
@@ -26,6 +27,7 @@ export interface ConfirmBatchOptions {
   readonly clock?: Clock;
   readonly idFactory?: () => string;
   readonly messages?: ConfirmBatchMessages;
+  readonly auditLogger?: AuditLogger;
 }
 
 export interface ConfirmBatchMessages {
@@ -55,6 +57,7 @@ export class ConfirmBatch {
   readonly #now: () => string;
   readonly #idFactory: () => string;
   readonly #messages: ConfirmBatchMessages;
+  readonly #auditLogger: AuditLogger | undefined;
 
   constructor(
     private readonly plans: PlanRepository,
@@ -67,6 +70,7 @@ export class ConfirmBatch {
       options.clock?.now.bind(options.clock) ?? options.now ?? (() => new Date().toISOString());
     this.#idFactory = options.idFactory ?? randomUUID;
     this.#messages = options.messages ?? defaultMessages;
+    this.#auditLogger = options.auditLogger;
   }
 
   async execute(input: ConfirmBatchInput): Promise<ConfirmedBatchResult> {
@@ -134,6 +138,12 @@ export class ConfirmBatch {
     this.prompt.writeLine(this.#messages.instruction);
     const answer = await this.prompt.ask(this.#messages.question);
     if (answer !== DESTRUCTIVE_CONFIRMATION_PHRASE) {
+      await recordAudit(this.#auditLogger, {
+        event: "run.confirmation.failed",
+        timestamp: this.#now(),
+        runId: run.id,
+        outcome: "CANCELED"
+      });
       return { confirmed: false, canceled: true, batch: null, summary };
     }
 
@@ -150,6 +160,12 @@ export class ConfirmBatch {
       updatedAt: now
     };
     this.runs.createBatch(batch);
+    await recordAudit(this.#auditLogger, {
+      event: "run.confirmation.succeeded",
+      timestamp: now,
+      runId: run.id,
+      outcome: "CONFIRMED"
+    });
     return { confirmed: true, canceled: false, batch, summary };
   }
 

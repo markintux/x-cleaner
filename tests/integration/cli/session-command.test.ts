@@ -70,6 +70,9 @@ describe("x-cleaner session", () => {
     const account = new SqliteCatalogRepository(database).getManagedAccount();
     database.close();
     expect(account).toMatchObject({ confirmedHandle: "exemplo", xUserId: "9007199254740993" });
+    const audit = await readFile(path.join(dataDirectory, "logs/audit.ndjson"), "utf8");
+    expect(audit).toContain('"event":"account.detected"');
+    expect(audit).toContain('"event":"account.confirmed"');
   });
 
   it("rejeita a confirmação sem criar uma conta vinculada", async () => {
@@ -95,6 +98,9 @@ describe("x-cleaner session", () => {
     new Migrator(database).migrate(migrations);
     expect(new SqliteCatalogRepository(database).getManagedAccount()).toBeNull();
     database.close();
+    const audit = await readFile(path.join(dataDirectory, "logs/audit.ndjson"), "utf8");
+    expect(audit).toContain('"event":"account.detected"');
+    expect(audit).toContain('"event":"account.rejected"');
   });
 
   it("bloqueia identidade diferente sem substituir a conta existente", async () => {
@@ -172,6 +178,8 @@ describe("x-cleaner session", () => {
       })
     );
     expect(lines.join("\n")).toContain("preservados");
+    const audit = await readFile(path.join(dataDirectory, "logs/audit.ndjson"), "utf8");
+    expect(audit).toContain('"event":"session.cleared"');
   });
 });
 

@@ -6,6 +6,7 @@ import { createStatusCommand } from "./commands/status.js";
 import { createSessionCommand } from "./commands/session.js";
 import { createRunCommand } from "./commands/run.js";
 import { createResumeCommand } from "./commands/resume.js";
+import { createReportCommand } from "./commands/report.js";
 import type { CliDependencies } from "./dependencies.js";
 
 export function createProgram(dependencies: CliDependencies): Command {
@@ -44,6 +45,13 @@ export function createProgram(dependencies: CliDependencies): Command {
     });
 
   program.addCommand(createSessionCommand(dependencies));
+
+  program
+    .command("report <runId>")
+    .description(dependencies.translator.translate("cli.reportDescription"))
+    .action(async (runId, _options, command) => {
+      await createReportCommand(dependencies)(runId, command.optsWithGlobals());
+    });
 
   program
     .command("run <planId>")

@@ -50,6 +50,18 @@ export const X_TEXT_KEYS = {
     "publicação excluída",
     "esta publicação foi excluída"
   ],
+  reactionRemoved: [
+    "repost undone",
+    "repost removed",
+    "republicação desfeita",
+    "republicação removida",
+    "unliked",
+    "like removed",
+    "descurtido",
+    "curtida removida"
+  ],
+  undoRepost: ["undo repost", "desfazer repost", "desfazer republicação"],
+  unlike: ["unlike", "descurtir", "remover curtida"],
   deleteAction: ["delete", "excluir", "apagar"],
   confirmDelete: ["delete", "excluir", "apagar"]
 } as const;
@@ -190,6 +202,82 @@ export const X_SELECTORS = {
       '[data-state="unavailable"]',
       '[data-unavailable="true"]',
       '[data-testid="post-unavailable"]'
+    ]
+  },
+  repost: {
+    target: [
+      '[data-testid="post"]',
+      '[data-testid="tweet"]',
+      "[data-post]",
+      "[data-x-status]",
+      "article[data-post-id]",
+      "article[data-status-id]",
+      "article[data-tweet-id]",
+      "article"
+    ],
+    idAttributes: [
+      "data-x-status-id",
+      "data-status-id",
+      "data-post-id",
+      "data-tweet-id",
+      "data-id"
+    ],
+    undoAction: [
+      '[data-action="undo-repost"]',
+      '[data-action="unrepost"]',
+      '[data-testid="undo-repost"]',
+      '[data-testid="unrepost"]',
+      '[data-testid="unretweet"]',
+      '[aria-label="Undo repost"]',
+      '[aria-label="Desfazer repost"]',
+      '[aria-label="Desfazer republicação"]',
+      '[role="button"][aria-label="Undo repost"]',
+      '[role="button"][aria-label="Desfazer repost"]',
+      '[role="button"][aria-label="Desfazer republicação"]'
+    ],
+    removedState: [
+      '[data-repost-state="undone"]',
+      '[data-repost-state="removed"]',
+      '[data-action-state="undo-repost"]',
+      '[data-action-state="undone"]'
+    ]
+  },
+  like: {
+    target: [
+      '[data-testid="post"]',
+      '[data-testid="tweet"]',
+      "[data-post]",
+      "[data-x-status]",
+      "article[data-post-id]",
+      "article[data-status-id]",
+      "article[data-tweet-id]",
+      "article"
+    ],
+    idAttributes: [
+      "data-x-status-id",
+      "data-status-id",
+      "data-post-id",
+      "data-tweet-id",
+      "data-id"
+    ],
+    unlikeAction: [
+      '[data-action="unlike"]',
+      '[data-action="remove-like"]',
+      '[data-testid="unlike"]',
+      '[data-testid="remove-like"]',
+      '[data-testid="unfavorite"]',
+      '[aria-label="Unlike"]',
+      '[aria-label="Descurtir"]',
+      '[aria-label="Remover curtida"]',
+      '[role="button"][aria-label="Unlike"]',
+      '[role="button"][aria-label="Descurtir"]',
+      '[role="button"][aria-label="Remover curtida"]'
+    ],
+    removedState: [
+      '[data-like-state="unliked"]',
+      '[data-like-state="removed"]',
+      '[data-action-state="unlike"]',
+      '[data-action-state="unliked"]'
     ]
   }
 } as const;

@@ -11,7 +11,9 @@ import type {
 import { normalizeAccountHandle } from "../../domain/account.js";
 import { BrowserContextFactory } from "./browser-context-factory.js";
 import { buildInteractionUrl } from "./x/interaction-url.js";
+import { LikePage, type LikePageEvidence } from "./x/like-page.js";
 import { PostPage, type PostPageEvidence } from "./x/post-page.js";
+import { RepostPage, type RepostPageEvidence } from "./x/repost-page.js";
 
 export interface BrowserCleanerEngineOptions {
   readonly dataDirectory?: string;
@@ -38,6 +40,7 @@ export class BrowserCleanerEngine implements CleanerEngine {
   readonly #statusUrlBuilder: (handle: string, interactionId: string) => string;
   readonly #pageFactory: (context: BrowserContextPort) => Promise<BrowserPagePort>;
   readonly #providedPage: BrowserPagePort | null;
+  readonly #reactionNavigationIsUnbound: boolean;
   #context: BrowserContextPort | null = null;
 
   constructor(options: BrowserCleanerEngineOptions);
@@ -69,11 +72,20 @@ export class BrowserCleanerEngine implements CleanerEngine {
       options.statusUrlBuilder ?? options.interactionUrlBuilder ?? buildInteractionUrl;
     this.#pageFactory = options.pageFactory ?? ((context) => context.newPage());
     this.#providedPage = options.page ?? null;
+    this.#reactionNavigationIsUnbound =
+      options.contextFactory !== undefined &&
+      options.page === undefined &&
+      options.statusUrlBuilder === undefined &&
+      options.interactionUrlBuilder === undefined &&
+      options.pageFactory === undefined;
   }
 
   async execute(input: CleanerEngineInteraction): Promise<CleanerEngineOutcome> {
     const startedAt = Date.now();
-    if (input.interaction.type !== "POST" && input.interaction.type !== "REPLY") {
+    if (
+      this.#reactionNavigationIsUnbound &&
+      (input.interaction.type === "REPOST" || input.interaction.type === "LIKE")
+    ) {
       return permanent("UNSUPPORTED_INTERACTION_TYPE", elapsed(startedAt));
     }
 
@@ -92,10 +104,10 @@ export class BrowserCleanerEngine implements CleanerEngine {
       const page = await this.page();
       const url = this.#statusUrlBuilder(handle, input.interaction.xInteractionId);
       await page.goto(url, { waitUntil: "domcontentloaded" });
-      const evidence = await new PostPage(page, {
+      const evidence = await this.executePageAction(page, input.interaction.type, {
         expectedHandle: handle,
         expectedInteractionId: input.interaction.xInteractionId
-      }).deletePost();
+      });
       return mapEvidence(evidence, elapsed(startedAt));
     } catch {
       return permanent("BROWSER_ERROR", elapsed(startedAt));
@@ -127,6 +139,22 @@ export class BrowserCleanerEngine implements CleanerEngine {
     }
     return this.#pageFactory(await this.context());
   }
+
+  private executePageAction(
+    page: BrowserPagePort,
+    type: CleanerEngineInteraction["interaction"]["type"],
+    identity: { readonly expectedHandle: string; readonly expectedInteractionId: string }
+  ): Promise<BrowserPageEvidence> {
+    switch (type) {
+      case "POST":
+      case "REPLY":
+        return new PostPage(page, identity).deletePost();
+      case "REPOST":
+        return new RepostPage(page, identity).undoRepost();
+      case "LIKE":
+        return new LikePage(page, identity).unlike();
+    }
+  }
 }
 
 export const BrowserEngine = BrowserCleanerEngine;
@@ -137,9 +165,12 @@ export function createBrowserCleanerEngine(
   return new BrowserCleanerEngine(options);
 }
 
-function mapEvidence(evidence: PostPageEvidence, durationMs: number): CleanerEngineOutcome {
+type BrowserPageEvidence = PostPageEvidence | RepostPageEvidence | LikePageEvidence;
+
+function mapEvidence(evidence: BrowserPageEvidence, durationMs: number): CleanerEngineOutcome {
   switch (evidence.kind) {
     case "DELETED":
+    case "COMPLETED":
       return { kind: "COMPLETED", outcome: "COMPLETED", durationMs };
     case "ALREADY_REMOVED":
       return {

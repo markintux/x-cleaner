@@ -1,6 +1,3 @@
-import { createInterface } from "node:readline/promises";
-import { stdin as standardInput, stdout as standardOutput } from "node:process";
-
 import {
   ConfirmBatch,
   type BatchConfirmationSummary
@@ -8,23 +5,23 @@ import {
 import { CreateRun } from "../../application/runs/create-run.js";
 import { ExecuteBatch } from "../../application/runs/execute-batch.js";
 import { RecoverRun } from "../../application/runs/recover-run.js";
-import type { Prompt } from "../../application/ports/prompt.js";
 import type { DetectedAccount } from "../../domain/account.js";
 import { LoginSession } from "../../application/session/login-session.js";
-import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import {
   openCliRepositories,
   createConfirmedBrowserEngine,
   type CliDependencies,
-  type CliRepositories
+  type CliRepositories,
+  resolveCliDataDirectory
 } from "../dependencies.js";
 import type { CleanerEngine } from "../../application/ports/cleaner-engine.js";
 import type { ExecuteBatchResult } from "../../application/runs/execute-batch.js";
 import { ProcessSignals } from "../../platform/process-signals.js";
-import { systemDelay } from "../../platform/delay.js";
+import { SystemDelay } from "../../platform/delay.js";
 import { GetRunProgress } from "../../application/progress/get-run-progress.js";
 import { ProgressRenderer } from "../progress-renderer.js";
 import { recordAudit } from "../../application/ports/audit-logger.js";
+import { ReadlinePrompt } from "../prompt.js";
 
 export interface RunCommandOptions {
   readonly dataDir?: string;
@@ -56,24 +53,23 @@ async function executeCommand(
   identifier: string,
   options: RunCommandOptions
 ): Promise<RunCommandResult> {
-  const dataDirectory = resolveApplicationDataDirectory(
-    options.dataDir === undefined ? {} : { dataDir: options.dataDir }
-  );
+  const dataDirectory = resolveCliDataDirectory(dependencies, options.dataDir);
   const repositories = await openCliRepositories(dependencies, dataDirectory);
   try {
     const services = requireRunRepositories(repositories);
     const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
     const limit = parseLimit(options.limit);
+    const commandClock = dependencies.run?.clock ?? dependencies.clock;
+    const now = commandClock?.now.bind(commandClock) ?? defaultNow;
     let account: DetectedAccount | undefined;
     let run;
     if (mode === "run") {
       account = await resolveCurrentAccount(dependencies, dataDirectory);
       run =
         services.runs.getRunForPlan(identifier) ??
-        new CreateRun(services.plans, services.catalog, services.runs).execute({
-          planId: identifier,
-          account
-        }).run;
+        new CreateRun(services.plans, services.catalog, services.runs, {
+          now
+        }).execute({ planId: identifier, account }).run;
     } else {
       run = requireRun(services.runs.getRun(identifier));
     }
@@ -83,7 +79,7 @@ async function executeCommand(
       }
       new RecoverRun(
         { runs: services.runs, audit: services.audit, unitOfWork: services.unitOfWork },
-        dependencies.run?.clock === undefined ? {} : { clock: dependencies.run.clock }
+        commandClock === undefined ? {} : { clock: commandClock }
       ).execute({ runId: run.id });
       run = requireRun(services.runs.getRun(run.id));
       account = await resolveCurrentAccount(dependencies, dataDirectory);
@@ -93,14 +89,17 @@ async function executeCommand(
       assertAccountMatchesRun(run.boundHandle, account);
       await recordAudit(auditLogger, {
         event: "run.resumed",
-        timestamp: new Date().toISOString(),
+        timestamp: now(),
         runId: run.id
       });
     }
     if (account === undefined) {
       throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
     }
-    const prompt = dependencies.run?.prompt ?? dependencies.prompt ?? new CliPrompt(dependencies);
+    const prompt =
+      dependencies.run?.prompt ??
+      dependencies.prompt ??
+      new ReadlinePrompt({ writeLine: (message) => dependencies.output.writeLine(message) });
     dependencies.output.writeLine(
       dependencies.translator.translate("run.planId", { planId: run.planId })
     );
@@ -109,7 +108,7 @@ async function executeCommand(
     );
     const configuredEngine =
       dependencies.run?.engine ?? dependencies.run?.cleanerEngine ?? engineFromLegacy(dependencies);
-    const confirmationOptions = dependencies.run?.clock ? { clock: dependencies.run.clock } : {};
+    const confirmationOptions = commandClock ? { clock: commandClock } : {};
     const localizedConfirmationOptions = {
       ...confirmationOptions,
       ...(auditLogger === undefined ? {} : { auditLogger }),
@@ -154,13 +153,17 @@ async function executeCommand(
       }) ??
       createConfirmedBrowserEngine(dataDirectory, run.boundHandle);
     const executionOptions = {
-      ...(dependencies.run?.clock === undefined ? {} : { clock: dependencies.run.clock }),
-      delay: dependencies.run?.delay ?? systemDelay
+      ...(commandClock === undefined ? {} : { clock: commandClock }),
+      delay: dependencies.run?.delay ?? dependencies.delay ?? new SystemDelay()
     };
-    const signals = new ProcessSignals({
-      runId: run.id,
-      writeLine: (message) => dependencies.output.writeLine(message)
-    });
+    const signals =
+      dependencies.run?.signalFactory?.(run.id) ??
+      new ProcessSignals({
+        runId: run.id,
+        resumeMessage: (value) =>
+          dependencies.translator.translate("run.resumeInstruction", { runId: value }),
+        writeLine: (message) => dependencies.output.writeLine(message)
+      });
     const uninstallSignals = signals.install();
     let result: ExecuteBatchResult;
     try {
@@ -244,6 +247,14 @@ async function resolveCurrentAccount(
     }
     throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
   }
+  const sessionFactory = dependencies.session?.createLoginSession;
+  if (sessionFactory !== undefined) {
+    const result = await (await sessionFactory(dataDirectory)).execute();
+    if (result.account !== null) {
+      return result.account;
+    }
+    throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
+  }
   const result = await new LoginSession({ dataDirectory }).execute();
   if (result.account === null) {
     throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
@@ -296,19 +307,6 @@ function requireRunRepositories(repositories: CliRepositories) {
   return { ...repositories, runs: repositories.runs };
 }
 
-class CliPrompt implements Prompt {
-  constructor(private readonly dependencies: CliDependencies) {}
-
-  writeLine(message: string): void {
-    this.dependencies.output.writeLine(message);
-  }
-
-  async ask(question: string): Promise<string> {
-    const readline = createInterface({ input: standardInput, output: standardOutput });
-    try {
-      return await readline.question(question + " ");
-    } finally {
-      readline.close();
-    }
-  }
+function defaultNow(): string {
+  return new Date().toISOString();
 }

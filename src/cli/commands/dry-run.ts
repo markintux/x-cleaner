@@ -1,4 +1,3 @@
-import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import { createCleaningPlan } from "../../application/plans/create-cleaning-plan.js";
 import { recordAudit } from "../../application/ports/audit-logger.js";
 import { SelectionValidationError, type SelectionInput } from "../../domain/selection.js";
@@ -6,7 +5,8 @@ import type { InteractionType } from "../../domain/interaction.js";
 import {
   openCliRepositories,
   type CliDependencies,
-  type CliRepositories
+  type CliRepositories,
+  resolveCliDataDirectory
 } from "../dependencies.js";
 
 export interface DryRunCommandOptions {
@@ -26,9 +26,7 @@ export function createDryRunCommand(
   dependencies: CliDependencies
 ): (options: DryRunCommandOptions) => Promise<DryRunCommandResult> {
   return async (options) => {
-    const dataDirectory = resolveApplicationDataDirectory(
-      options.dataDir === undefined ? {} : { dataDir: options.dataDir }
-    );
+    const dataDirectory = resolveCliDataDirectory(dependencies, options.dataDir);
     const repositories = await openRepositories(dependencies, dataDirectory);
     try {
       const input: SelectionInput = {
@@ -40,7 +38,10 @@ export function createDryRunCommand(
         repositories.database,
         repositories.catalog,
         repositories.plans,
-        input
+        input,
+        dependencies.clock === undefined
+          ? {}
+          : { now: dependencies.clock.now.bind(dependencies.clock) }
       );
       // The plan stores exact item IDs; derive type counts without loading
       // content by resolving the same lightweight selection rows.

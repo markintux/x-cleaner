@@ -1,11 +1,28 @@
 #!/usr/bin/env node
-import { createProgram } from "./cli/create-program.js";
-import { consoleOutput } from "./cli/dependencies.js";
-import { createTranslator } from "./i18n/translator.js";
+import { pathToFileURL } from "node:url";
 
-const program = createProgram({
-  output: consoleOutput,
-  translator: createTranslator()
-});
+import { createCompositionRoot, type CompositionRoot } from "./composition-root.js";
+import { createProgram, isSuccessfulCommanderExit, reportCliError } from "./cli/create-program.js";
 
-await program.parseAsync();
+export async function runCli(
+  arguments_: readonly string[] = process.argv,
+  root: CompositionRoot = createCompositionRoot()
+): Promise<number> {
+  const program = createProgram(root.dependencies);
+  program.exitOverride();
+  try {
+    await program.parseAsync([...arguments_]);
+    return 0;
+  } catch (error) {
+    if (isSuccessfulCommanderExit(error)) return 0;
+    const diagnostics = Boolean(program.opts<{ diagnostics?: boolean }>().diagnostics);
+    return reportCliError(error, root.dependencies, diagnostics);
+  } finally {
+    await root.close();
+  }
+}
+
+const entryPoint = process.argv[1];
+if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
+  process.exitCode = await runCli();
+}

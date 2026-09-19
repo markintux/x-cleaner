@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import { resolveApplicationDataDirectory } from "../platform/application-data.js";
 import type { CatalogRepository } from "../application/ports/catalog-repository.js";
 import type { CleanerEngine } from "../application/ports/cleaner-engine.js";
 import type { Clock } from "../application/ports/clock.js";
@@ -24,6 +25,10 @@ import type { ReportRepository } from "../application/ports/report-repository.js
 import type { AuditLogger } from "../application/ports/audit-logger.js";
 import type { Translator } from "../i18n/translator.js";
 import type { DetectedAccount } from "../domain/account.js";
+import type { RunReport } from "../application/reports/generate-run-report.js";
+import type { ArchiveDetector } from "../infrastructure/archive/archive-detector.js";
+import type { ImportArchiveOptions } from "../application/import/import-archive.js";
+import type { ExecuteBatchSignal } from "../application/runs/execute-batch.js";
 import { migrations } from "../infrastructure/database/migrations/index.js";
 import { SqliteDatabase } from "../infrastructure/database/database.js";
 import { Migrator } from "../infrastructure/database/migrator.js";
@@ -42,6 +47,23 @@ import {
 
 export interface CliOutput {
   writeLine(message: string): void;
+}
+
+export interface CliSignalAdapter extends ExecuteBatchSignal {
+  install(): () => void;
+  uninstall(): void;
+}
+
+export interface CliReportWriter {
+  write(report: RunReport): Promise<{
+    readonly relativePath: string;
+    readonly sha256: string;
+  }>;
+}
+
+export interface CliArchiveDependencies {
+  readonly detector?: ArchiveDetector;
+  readonly sourceFactory?: ImportArchiveOptions["sourceFactory"];
 }
 
 export interface CliRepositories {
@@ -66,6 +88,7 @@ export interface RunCliDependencies {
   readonly clock?: Clock;
   readonly delay?: Delay;
   readonly lock?: ExecutorLockPort;
+  readonly signalFactory?: (runId: string) => CliSignalAdapter;
   readonly createBrowserEngine?: (options: BrowserCleanerEngineOptions) => CleanerEngine;
 }
 
@@ -91,7 +114,12 @@ export interface SessionCliDependencies {
 
 export interface CliDependencies {
   readonly output: CliOutput;
+  readonly errorOutput?: CliOutput;
   readonly translator: Translator;
+  readonly clock?: Clock;
+  readonly delay?: Delay;
+  readonly diagnostics?: boolean;
+  readonly resolveDataDirectory?: (override?: string) => string;
   /** Read-only commands must never access this future destructive boundary. */
   readonly cleanerEngine?: CleanerEngine | ((...arguments_: readonly unknown[]) => unknown);
   readonly prompt?: Prompt;
@@ -106,6 +134,19 @@ export interface CliDependencies {
   ) => CliRepositories | Promise<CliRepositories>;
   readonly session?: SessionCliDependencies;
   readonly auditLogger?: AuditLogger;
+  readonly auditLoggerFactory?: (dataDirectory: string) => AuditLogger;
+  readonly archive?: CliArchiveDependencies;
+  readonly reportWriterFactory?: (
+    dataDirectory: string,
+    reports: ReportRepository | undefined
+  ) => CliReportWriter;
+}
+
+export function resolveCliDataDirectory(dependencies: CliDependencies, override?: string): string {
+  return (
+    dependencies.resolveDataDirectory?.(override) ??
+    resolveApplicationDataDirectory(override === undefined ? {} : { dataDir: override })
+  );
 }
 
 export async function openCliRepositories(
@@ -121,12 +162,16 @@ export async function openCliRepositories(
 
   await mkdir(dataDirectory, { recursive: true });
   const database = new SqliteDatabase(path.join(dataDirectory, "state.sqlite"));
-  new Migrator(database).migrate(migrations);
-  const catalog = new SqliteCatalogRepository(database);
+  const now = dependencies.clock?.now.bind(dependencies.clock);
+  const migratorOptions = now === undefined ? {} : { now };
+  new Migrator(database, migratorOptions).migrate(migrations);
+  const catalogOptions = now === undefined ? {} : { now };
+  const catalog = new SqliteCatalogRepository(database, catalogOptions);
   const plans = new SqlitePlanRepository(database);
-  const runs = new SqliteRunRepository(database);
+  const runs = new SqliteRunRepository(database, catalogOptions);
   const audit = new SqliteAuditRepository(database);
   const reports = new SqliteReportRepository(database);
+  const lockOptions = now === undefined ? {} : { now };
   return {
     database,
     catalog,
@@ -134,9 +179,12 @@ export async function openCliRepositories(
     runs,
     audit,
     reports,
-    auditLogger: dependencies.auditLogger ?? new NdjsonLogger(dataDirectory),
+    auditLogger:
+      dependencies.auditLogger ??
+      dependencies.auditLoggerFactory?.(dataDirectory) ??
+      new NdjsonLogger(dataDirectory),
     unitOfWork: new UnitOfWork(database, runs, audit),
-    lock: new ExecutorLock(dataDirectory),
+    lock: new ExecutorLock(dataDirectory, lockOptions),
     close: () => database.close()
   };
 }
@@ -144,6 +192,12 @@ export async function openCliRepositories(
 export const consoleOutput: CliOutput = {
   writeLine(message) {
     process.stdout.write(`${message}\n`);
+  }
+};
+
+export const consoleErrorOutput: CliOutput = {
+  writeLine(message) {
+    process.stderr.write(`${message}\n`);
   }
 };
 

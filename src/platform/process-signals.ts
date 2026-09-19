@@ -17,6 +17,7 @@ export interface ProcessSignalOptions {
   readonly onFirstInterrupt?: () => Promise<void> | void;
   readonly writeLine?: (message: string) => void;
   readonly output?: { writeLine(message: string): void };
+  readonly resumeMessage?: (runId: string) => string;
   /** Injected in tests; production uses process.exit. */
   readonly forceExit?: (code: number) => void;
   readonly exit?: (code: number) => void;
@@ -33,6 +34,7 @@ export class ProcessSignals {
   #flushCheckpoint: (() => Promise<void> | void) | undefined;
   readonly #writeLine: (message: string) => void;
   readonly #forceExit: (code: number) => void;
+  readonly #resumeMessage: (runId: string) => string;
   readonly #listener: () => void;
   #interruptCount = 0;
   #stopRequested = false;
@@ -49,6 +51,7 @@ export class ProcessSignals {
         ? (message) => process.stdout.write(`${message}\n`)
         : (message) => options.output!.writeLine(message));
     this.#forceExit = options.forceExit ?? options.exit ?? ((code) => process.exit(code));
+    this.#resumeMessage = options.resumeMessage ?? resumeCommand;
     this.#listener = () => {
       void this.handleSigint();
     };
@@ -98,7 +101,7 @@ export class ProcessSignals {
     } catch {
       // The resume command is still useful when a best-effort flush fails.
     } finally {
-      this.#writeLine(`${RESUME_COMMAND_PREFIX} ${this.#runId}`);
+      this.#writeLine(this.#resumeMessage(this.#runId));
     }
   }
 

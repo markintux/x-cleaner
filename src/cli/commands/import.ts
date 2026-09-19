@@ -1,9 +1,10 @@
-import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import { ImportArchive } from "../../application/import/import-archive.js";
+import type { ImportArchiveOptions } from "../../application/import/import-archive.js";
 import {
   openCliRepositories,
   type CliDependencies,
-  type CliRepositories
+  type CliRepositories,
+  resolveCliDataDirectory
 } from "../dependencies.js";
 
 export interface ImportCommandOptions {
@@ -19,13 +20,22 @@ export function createImportCommand(
   dependencies: CliDependencies
 ): (input: string, options: ImportCommandOptions) => Promise<ImportCommandResult> {
   return async (input, options) => {
-    const dataDirectory = resolveApplicationDataDirectory(
-      options.dataDir === undefined ? {} : { dataDir: options.dataDir }
-    );
+    const dataDirectory = resolveCliDataDirectory(dependencies, options.dataDir);
     const repositories = await openRepositories(dependencies, dataDirectory);
     try {
       const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
-      const importOptions = auditLogger === undefined ? {} : { auditLogger };
+      const importOptions: ImportArchiveOptions = {
+        ...(dependencies.archive?.detector === undefined
+          ? {}
+          : { detector: dependencies.archive.detector }),
+        ...(dependencies.archive?.sourceFactory === undefined
+          ? {}
+          : { sourceFactory: dependencies.archive.sourceFactory }),
+        ...(dependencies.clock === undefined
+          ? {}
+          : { now: dependencies.clock.now.bind(dependencies.clock) }),
+        ...(auditLogger === undefined ? {} : { auditLogger })
+      };
       const result = await new ImportArchive(
         repositories.database,
         repositories.catalog,

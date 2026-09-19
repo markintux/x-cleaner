@@ -3,6 +3,25 @@ import type { MessageCatalog } from "./catalog.js";
 export const ptBR: MessageCatalog = {
   "cli.description": "Organiza localmente o histórico da sua própria conta no X.",
   "cli.dataDirectoryOption": "diretório local isolado para os dados da aplicação",
+  "cli.diagnosticsOption": "exibe stack trace somente para diagnóstico local explícito",
+  "cli.helpUsage": "Uso:",
+  "cli.helpArguments": "Argumentos:",
+  "cli.helpOptions": "Opções:",
+  "cli.helpCommands": "Comandos:",
+  "cli.error": "Operação não concluída. Código: {errorCode}.",
+  "cli.nextStep": "Próximo passo: {nextStep}",
+  "cli.diagnosticDetails": "Diagnóstico local: {details}",
+  "cli.helpOption": "exibe ajuda em português",
+  "cli.helpCommand": "exibe ajuda de um comando em português",
+  "cli.nextImport": "valide o arquivo ou diretório e tente `x-cleaner import <caminho>` novamente.",
+  "cli.nextDryRun": "revise o catálogo e crie uma nova simulação com `x-cleaner dry-run`.",
+  "cli.nextSession": "confirme a conta ou restaure a sessão com `x-cleaner session login`.",
+  "cli.nextPlan": "crie uma simulação válida com `x-cleaner dry-run` antes de executar.",
+  "cli.nextResume":
+    "revise o estado local e use `x-cleaner resume <run-id>` quando estiver seguro.",
+  "cli.nextLock": "aguarde o executor ativo terminar; consulte `x-cleaner status`.",
+  "cli.nextGeneral":
+    "revise o estado local e tente novamente sem ignorar as confirmações de segurança.",
   "cli.statusDescription": "mostra o diretório local controlado pelo X Cleaner",
   "cli.importDescription": "importa um arquivo ZIP ou diretório de X Archive",
   "cli.dryRunDescription": "cria uma simulação imutável sem alterar o X",
@@ -21,6 +40,7 @@ export const ptBR: MessageCatalog = {
   "run.warning": "AVISO: esta ação é irreversível e altera sua conta no X.",
   "run.confirmInstruction": "Digite exatamente APAGAR para continuar.",
   "run.confirmQuestion": "Confirmação:",
+  "run.resumeInstruction": "x-cleaner resume {runId}",
   "run.canceled": "Execução cancelada; nenhuma interação foi enviada à engine.",
   "run.completed": "Run {runId} concluído nesta etapa: {count} item(ns).",
   "run.paused":
@@ -37,7 +57,8 @@ export const ptBR: MessageCatalog = {
     "Ciclo de importações — concluídas: {completed}; em andamento: {processing}; falhas: {failed}",
   "status.catalog": "Catálogo: {total} interações",
   "status.typeCount": "{type}: {count}",
-  "status.emptyCatalog": "O catálogo está vazio.",
+  "status.emptyCatalog":
+    "O catálogo está vazio; importe um X Archive com `x-cleaner import <caminho>` para começar.",
   "import.completed": "Importação concluída.",
   "import.adapter": "Adaptador: {adapter}",
   "import.inserted": "Inseridos: {count}",

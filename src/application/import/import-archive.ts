@@ -26,7 +26,7 @@ export interface ImportArchiveOptions {
   readonly now?: () => string;
   readonly idFactory?: () => string;
   readonly batchSize?: number;
-  readonly sourceFactory?: (directory: string) => ArchiveSource;
+  readonly sourceFactory?: (input: string) => ArchiveSource | Promise<ArchiveSource>;
   readonly sourceOptions?: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
   readonly auditLogger?: AuditLogger;
 }
@@ -51,7 +51,7 @@ export class ImportArchive {
   readonly #now: () => string;
   readonly #idFactory: () => string;
   readonly #batchSize: number;
-  readonly #sourceFactory: ((input: string) => ArchiveSource) | undefined;
+  readonly #sourceFactory: ((input: string) => ArchiveSource | Promise<ArchiveSource>) | undefined;
   readonly #sourceOptions: DirectoryArchiveSourceOptions & ZipArchiveSourceOptions;
   readonly #auditLogger: AuditLogger | undefined;
 
@@ -75,7 +75,8 @@ export class ImportArchive {
   async execute(input: string | ArchiveSource): Promise<ImportArchiveResult> {
     const source =
       typeof input === "string"
-        ? (this.#sourceFactory?.(input) ?? (await sourceFromPath(input, this.#sourceOptions)))
+        ? ((await this.#sourceFactory?.(input)) ??
+          (await sourceFromPath(input, this.#sourceOptions)))
         : input;
     const importId = this.#idFactory();
     const startedAt = this.#now();

@@ -1,9 +1,9 @@
-import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import { getCatalogStatus } from "../../application/catalog/get-catalog-status.js";
 import {
   openCliRepositories,
   type CliDependencies,
-  type CliRepositories
+  type CliRepositories,
+  resolveCliDataDirectory
 } from "../dependencies.js";
 
 export interface StatusCommandOptions {
@@ -14,9 +14,7 @@ export function createStatusCommand(
   dependencies: CliDependencies
 ): (options: StatusCommandOptions) => Promise<void> {
   return async (options) => {
-    const dataDirectory = resolveApplicationDataDirectory(
-      options.dataDir === undefined ? {} : { dataDir: options.dataDir }
-    );
+    const dataDirectory = resolveCliDataDirectory(dependencies, options.dataDir);
     const repositories = await openRepositories(dependencies, dataDirectory);
     try {
       const status = getCatalogStatus(repositories.catalog);

@@ -1,6 +1,23 @@
 export const messageKeys = [
   "cli.description",
   "cli.dataDirectoryOption",
+  "cli.diagnosticsOption",
+  "cli.helpUsage",
+  "cli.helpArguments",
+  "cli.helpOptions",
+  "cli.helpCommands",
+  "cli.error",
+  "cli.nextStep",
+  "cli.diagnosticDetails",
+  "cli.helpOption",
+  "cli.helpCommand",
+  "cli.nextImport",
+  "cli.nextDryRun",
+  "cli.nextSession",
+  "cli.nextPlan",
+  "cli.nextResume",
+  "cli.nextLock",
+  "cli.nextGeneral",
   "cli.statusDescription",
   "cli.importDescription",
   "cli.dryRunDescription",
@@ -18,6 +35,7 @@ export const messageKeys = [
   "run.warning",
   "run.confirmInstruction",
   "run.confirmQuestion",
+  "run.resumeInstruction",
   "run.canceled",
   "run.completed",
   "run.paused",
@@ -90,3 +108,29 @@ export const messageKeys = [
 export type MessageKey = (typeof messageKeys)[number];
 export type MessageParameters = Readonly<Record<string, string | number>>;
 export type MessageCatalog = Readonly<Record<MessageKey, string>>;
+
+export interface CatalogParity {
+  readonly missingKeys: readonly MessageKey[];
+  readonly extraKeys: readonly string[];
+  readonly valid: boolean;
+}
+
+/** Checks a complete catalog without tying future locales to Portuguese text. */
+export function checkCatalogParity(catalog: Readonly<Record<string, string>>): CatalogParity {
+  const expected = new Set<string>(messageKeys);
+  const actual = new Set(Object.keys(catalog));
+  const missingKeys = messageKeys.filter((key) => !actual.has(key));
+  const extraKeys = [...actual].filter((key) => !expected.has(key)).sort();
+  return { missingKeys, extraKeys, valid: missingKeys.length === 0 && extraKeys.length === 0 };
+}
+
+export function assertCatalogParity(
+  catalog: Readonly<Record<string, string>>
+): asserts catalog is MessageCatalog {
+  const parity = checkCatalogParity(catalog);
+  if (!parity.valid) {
+    throw new Error(
+      `CATALOG_PARITY_MISMATCH:${parity.missingKeys.join(",")}:${parity.extraKeys.join(",")}`
+    );
+  }
+}

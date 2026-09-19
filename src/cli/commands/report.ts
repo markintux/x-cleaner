@@ -1,10 +1,10 @@
-import { resolveApplicationDataDirectory } from "../../platform/application-data.js";
 import { GenerateRunReport } from "../../application/reports/generate-run-report.js";
 import { JsonReportWriter } from "../../infrastructure/reports/json-report-writer.js";
 import {
   openCliRepositories,
   type CliDependencies,
-  type CliRepositories
+  type CliRepositories,
+  resolveCliDataDirectory
 } from "../dependencies.js";
 import { ProgressRenderer } from "../progress-renderer.js";
 import type { RunProgress } from "../../application/progress/get-run-progress.js";
@@ -23,18 +23,22 @@ export function createReportCommand(
   dependencies: CliDependencies
 ): (runId: string, options: ReportCommandOptions) => Promise<ReportCommandResult> {
   return async (runId, options) => {
-    const dataDirectory = resolveApplicationDataDirectory(
-      options.dataDir === undefined ? {} : { dataDir: options.dataDir }
-    );
+    const dataDirectory = resolveCliDataDirectory(dependencies, options.dataDir);
     const repositories = await openRepositories(dependencies, dataDirectory);
     try {
       if (repositories.runs === undefined) {
         throw new Error("REPORT_REPOSITORIES_NOT_CONFIGURED");
       }
       const report = new GenerateRunReport({ runs: repositories.runs }).execute(runId);
-      const writerOptions =
-        repositories.reports === undefined ? {} : { reports: repositories.reports };
-      const written = await new JsonReportWriter(dataDirectory, writerOptions).write(report);
+      const writer =
+        dependencies.reportWriterFactory?.(dataDirectory, repositories.reports) ??
+        new JsonReportWriter(dataDirectory, {
+          ...(repositories.reports === undefined ? {} : { reports: repositories.reports }),
+          ...(dependencies.clock === undefined
+            ? {}
+            : { now: dependencies.clock.now.bind(dependencies.clock) })
+        });
+      const written = await writer.write(report);
       const renderer = new ProgressRenderer({ translator: dependencies.translator });
       const progress: RunProgress = {
         runId: report.runId,

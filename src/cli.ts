@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { createCompositionRoot, type CompositionRoot } from "./composition-root.js";
 import { createProgram, isSuccessfulCommanderExit, reportCliError } from "./cli/create-program.js";
@@ -23,6 +24,14 @@ export async function runCli(
 }
 
 const entryPoint = process.argv[1];
-if (entryPoint !== undefined && import.meta.url === pathToFileURL(entryPoint).href) {
+if (entryPoint !== undefined && isMainModule(entryPoint)) {
   process.exitCode = await runCli();
+}
+
+function isMainModule(entryPoint: string): boolean {
+  try {
+    return realpathSync(entryPoint) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
 }

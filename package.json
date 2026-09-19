@@ -4,12 +4,20 @@
   "private": true,
   "type": "module",
   "description": "CLI local-first para organizar e limpar interações da própria conta no X.",
+  "license": "MIT",
   "engines": {
     "node": ">=24"
   },
   "bin": {
     "x-cleaner": "./dist/cli.js"
   },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
@@ -18,6 +26,8 @@
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "check:private-artifacts": "node scripts/check-private-artifacts.mjs",
+    "inspect:package": "node scripts/inspect-package.mjs",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build"
   },
   "dependencies": {

@@ -64,16 +64,24 @@ export async function inspectPackage(rootDirectory = process.cwd()) {
 }
 
 async function packFiles(root) {
-  const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
-  const result = spawnSync(npmExecutable, ["pack", "--dry-run", "--json", "--ignore-scripts"], {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"]
-  });
+  const arguments_ = ["pack", "--dry-run", "--json", "--ignore-scripts"];
+  const npmCli = process.env.npm_execpath;
+  const result =
+    npmCli === undefined
+      ? spawnSync("npm", arguments_, {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"],
+          shell: process.platform === "win32"
+        })
+      : spawnSync(process.execPath, [npmCli, ...arguments_], {
+          cwd: root,
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "pipe"]
+        });
   if (result.status !== 0) {
-    throw new Error(
-      `npm pack falhou: ${(result.stderr || result.stdout).trim() || "erro desconhecido"}`
-    );
+    const details = result.stderr ?? result.stdout ?? result.error?.message ?? "";
+    throw new Error(`npm pack falhou: ${String(details).trim() || "erro desconhecido"}`);
   }
   try {
     const parsed = JSON.parse(result.stdout);

@@ -9,7 +9,11 @@ import { afterEach, describe, expect, it } from "vitest";
 const execFileAsync = promisify(execFile);
 const projectRoot = path.resolve(".");
 const inspector = path.join(projectRoot, "scripts/inspect-package.mjs");
-const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCli = process.env.npm_execpath;
+
+if (npmCli === undefined) {
+  throw new Error("npm_execpath não está disponível para o teste de empacotamento");
+}
 
 describe("conteúdo e execução do pacote", () => {
   const temporaryDirectories: string[] = [];
@@ -23,17 +27,13 @@ describe("conteúdo e execução do pacote", () => {
   });
 
   it("inspeciona um pacote seguro e não inclui fontes, mapas ou testes", async () => {
-    const build = await runCommand(npmExecutable, ["run", "build"], projectRoot);
+    const build = await runNpm(["run", "build"], projectRoot);
     expect(build.code, build.stderr || build.stdout).toBe(0);
     const inspection = await runNode([inspector], projectRoot);
     expect(inspection.code, inspection.stderr || inspection.stdout).toBe(0);
     expect(inspection.stdout).toContain("PACKAGE INSPECTION PASSOU");
 
-    const dryRun = await runCommand(
-      npmExecutable,
-      ["pack", "--dry-run", "--json", "--ignore-scripts"],
-      projectRoot
-    );
+    const dryRun = await runNpm(["pack", "--dry-run", "--json", "--ignore-scripts"], projectRoot);
     expect(dryRun.code, dryRun.stderr || dryRun.stdout).toBe(0);
     const entries = JSON.parse(dryRun.stdout) as Array<{ files?: Array<{ path: string }> }>;
     const files = entries.flatMap(
@@ -57,7 +57,7 @@ describe("conteúdo e execução do pacote", () => {
   }, 30_000);
 
   it("executa a ajuda do CLI instalado de um tarball em um caminho com espaços", async () => {
-    const build = await runCommand(npmExecutable, ["run", "build"], projectRoot);
+    const build = await runNpm(["run", "build"], projectRoot);
     expect(build.code, build.stderr || build.stdout).toBe(0);
     const workspace = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-package-"));
     temporaryDirectories.push(workspace);
@@ -68,8 +68,7 @@ describe("conteúdo e execução do pacote", () => {
     await mkdir(consumer, { recursive: true });
     await writeFile(path.join(consumer, "package.json"), JSON.stringify({ private: true }), "utf8");
 
-    const packed = await runCommand(
-      npmExecutable,
+    const packed = await runNpm(
       ["pack", "--ignore-scripts", "--pack-destination", staging, "--json"],
       projectRoot
     );
@@ -79,8 +78,7 @@ describe("conteúdo e execução do pacote", () => {
     expect(filename).toBeTruthy();
     const tarball = path.join(staging, filename!);
 
-    const installed = await runCommand(
-      npmExecutable,
+    const installed = await runNpm(
       ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--no-package-lock", tarball],
       consumer
     );
@@ -105,17 +103,17 @@ async function runNode(arguments_: readonly string[], cwd: string): Promise<Proc
   return runCommand(process.execPath, arguments_, cwd);
 }
 
+async function runNpm(arguments_: readonly string[], cwd: string): Promise<ProcessResult> {
+  return runNode([npmCli, ...arguments_], cwd);
+}
+
 async function runCommand(
   command: string,
   arguments_: readonly string[],
   cwd: string
 ): Promise<ProcessResult> {
   try {
-    const result = await execFileAsync(command, [...arguments_], {
-      cwd,
-      maxBuffer: 4_000_000,
-      shell: process.platform === "win32"
-    });
+    const result = await execFileAsync(command, [...arguments_], { cwd, maxBuffer: 4_000_000 });
     return { code: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     const failure = error as { code?: number | string; stdout?: string; stderr?: string };

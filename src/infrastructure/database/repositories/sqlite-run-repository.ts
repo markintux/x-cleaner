@@ -220,7 +220,14 @@ export class SqliteRunRepository implements RunRepository {
       .prepare(
         `UPDATE cleaning_run_items
          SET status = 'PENDING', processing_started_at = NULL, next_retry_at = ?, updated_at = ?
-         WHERE run_id = ? AND status = 'PROCESSING'`
+         WHERE run_id = ? AND status = 'PROCESSING'
+           AND (
+             attempt_count = 0 OR NOT EXISTS (
+               SELECT 1 FROM interaction_attempts
+               WHERE interaction_attempts.run_item_id = cleaning_run_items.id
+                 AND interaction_attempts.attempt_number = cleaning_run_items.attempt_count
+             )
+           )`
       )
       .run(now, now, runId);
     return Number(result.changes);

@@ -33,7 +33,15 @@ export interface CommitBatchBoundaryWork {
   readonly checkpoint: NewRunCheckpoint;
 }
 
+export interface CommitRecoveryWork {
+  readonly runId: string;
+  readonly recoveredAt: string;
+  readonly checkpoint: NewRunCheckpoint;
+}
+
 export interface ExecutionUnitOfWork {
   commitAttempt(work: CommitAttemptWork): void;
   commitBatchBoundary(work: CommitBatchBoundaryWork): void;
+  /** Recovers stale in-flight rows and records that recovery atomically. */
+  commitRecovery?(work: CommitRecoveryWork): number;
 }

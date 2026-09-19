@@ -23,6 +23,10 @@ export const ptBR: MessageCatalog = {
   "run.confirmQuestion": "Confirmação:",
   "run.canceled": "Execução cancelada; nenhuma interação foi enviada à engine.",
   "run.completed": "Run {runId} concluído nesta etapa: {count} item(ns).",
+  "run.paused":
+    "Execução pausada por {reason}; o estado foi salvo. Resolva a situação manualmente e use `x-cleaner resume {runId}`.",
+  "run.interrupted":
+    "Execução interrompida com segurança. O estado confirmado foi preservado; use `x-cleaner resume {runId}`.",
   "status.dataDirectory": "Diretório local de dados: {dataDirectory}",
   "status.localOnlyNotice":
     "Seus arquivos, sessão, registros, pontos de controle e relatórios permanecem somente neste computador. Nenhuma conexão com o X foi realizada.",

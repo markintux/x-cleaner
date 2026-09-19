@@ -20,6 +20,8 @@ export const messageKeys = [
   "run.confirmQuestion",
   "run.canceled",
   "run.completed",
+  "run.paused",
+  "run.interrupted",
   "status.dataDirectory",
   "status.localOnlyNotice",
   "status.account",

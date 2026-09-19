@@ -7,6 +7,7 @@ import {
 } from "../../application/runs/confirm-batch.js";
 import { CreateRun } from "../../application/runs/create-run.js";
 import { ExecuteBatch } from "../../application/runs/execute-batch.js";
+import { RecoverRun } from "../../application/runs/recover-run.js";
 import type { Prompt } from "../../application/ports/prompt.js";
 import type { DetectedAccount } from "../../domain/account.js";
 import { LoginSession } from "../../application/session/login-session.js";
@@ -19,6 +20,8 @@ import {
 } from "../dependencies.js";
 import type { CleanerEngine } from "../../application/ports/cleaner-engine.js";
 import type { ExecuteBatchResult } from "../../application/runs/execute-batch.js";
+import { ProcessSignals } from "../../platform/process-signals.js";
+import { systemDelay } from "../../platform/delay.js";
 
 export interface RunCommandOptions {
   readonly dataDir?: string;
@@ -56,18 +59,37 @@ async function executeCommand(
   const repositories = await openCliRepositories(dependencies, dataDirectory);
   try {
     const services = requireRunRepositories(repositories);
-    const account = await resolveCurrentAccount(dependencies, dataDirectory);
     const limit = parseLimit(options.limit);
-    const run =
-      mode === "run"
-        ? (services.runs.getRunForPlan(identifier) ??
-          new CreateRun(services.plans, services.catalog, services.runs).execute({
-            planId: identifier,
-            account
-          }).run)
-        : requireRun(services.runs.getRun(identifier));
+    let account: DetectedAccount | undefined;
+    let run;
+    if (mode === "run") {
+      account = await resolveCurrentAccount(dependencies, dataDirectory);
+      run =
+        services.runs.getRunForPlan(identifier) ??
+        new CreateRun(services.plans, services.catalog, services.runs).execute({
+          planId: identifier,
+          account
+        }).run;
+    } else {
+      run = requireRun(services.runs.getRun(identifier));
+    }
     if (mode === "resume") {
+      if (services.audit === undefined || services.unitOfWork === undefined) {
+        throw new Error("EXECUTION_SERVICES_NOT_CONFIGURED");
+      }
+      new RecoverRun(
+        { runs: services.runs, audit: services.audit, unitOfWork: services.unitOfWork },
+        dependencies.run?.clock === undefined ? {} : { clock: dependencies.run.clock }
+      ).execute({ runId: run.id });
+      run = requireRun(services.runs.getRun(run.id));
+      account = await resolveCurrentAccount(dependencies, dataDirectory);
+      if (account === undefined) {
+        throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
+      }
       assertAccountMatchesRun(run.boundHandle, account);
+    }
+    if (account === undefined) {
+      throw new Error("CURRENT_ACCOUNT_UNAVAILABLE");
     }
     const prompt = dependencies.run?.prompt ?? dependencies.prompt ?? new CliPrompt(dependencies);
     dependencies.output.writeLine(
@@ -123,8 +145,13 @@ async function executeCommand(
       createConfirmedBrowserEngine(dataDirectory, run.boundHandle);
     const executionOptions = {
       ...(dependencies.run?.clock === undefined ? {} : { clock: dependencies.run.clock }),
-      ...(dependencies.run?.delay === undefined ? {} : { delay: dependencies.run.delay })
+      delay: dependencies.run?.delay ?? systemDelay
     };
+    const signals = new ProcessSignals({
+      runId: run.id,
+      writeLine: (message) => dependencies.output.writeLine(message)
+    });
+    const uninstallSignals = signals.install();
     let result: ExecuteBatchResult;
     try {
       result = await new ExecuteBatch(
@@ -137,17 +164,31 @@ async function executeCommand(
           lock,
           engine
         },
-        executionOptions
+        { ...executionOptions, signal: signals }
       ).execute({ runId: run.id, batchId: confirmation.batch.id, account });
     } finally {
+      uninstallSignals();
       await closeEngine(engine);
     }
-    dependencies.output.writeLine(
-      dependencies.translator.translate("run.completed", {
-        runId: result.run.id,
-        count: result.processedCount
-      })
-    );
+    if (result.run.status === "PAUSED") {
+      dependencies.output.writeLine(
+        dependencies.translator.translate("run.paused", {
+          runId: result.run.id,
+          reason: result.run.pauseReason ?? "UNKNOWN_UI"
+        })
+      );
+    } else if (result.run.status === "INTERRUPTED") {
+      dependencies.output.writeLine(
+        dependencies.translator.translate("run.interrupted", { runId: result.run.id })
+      );
+    } else {
+      dependencies.output.writeLine(
+        dependencies.translator.translate("run.completed", {
+          runId: result.run.id,
+          count: result.processedCount
+        })
+      );
+    }
     return {
       canceled: false,
       runId: result.run.id,

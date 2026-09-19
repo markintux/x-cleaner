@@ -1,6 +1,7 @@
 import type {
   CommitAttemptWork,
-  CommitBatchBoundaryWork
+  CommitBatchBoundaryWork,
+  CommitRecoveryWork
 } from "../../application/ports/execution-unit-of-work.js";
 import type { SqliteDatabase } from "./database.js";
 import { SqliteRepositoryTransaction } from "./repository-transaction.js";
@@ -9,7 +10,8 @@ import type { SqliteRunRepository } from "./repositories/sqlite-run-repository.j
 
 export type {
   CommitAttemptWork,
-  CommitBatchBoundaryWork
+  CommitBatchBoundaryWork,
+  CommitRecoveryWork
 } from "../../application/ports/execution-unit-of-work.js";
 
 /**
@@ -55,5 +57,15 @@ export class UnitOfWork {
       );
       this.runs.updateRunStatus(work.run.id, work.run.status, work.run.state, transaction);
     });
+  }
+
+  commitRecovery(work: CommitRecoveryWork): number {
+    let recovered = 0;
+    this.database.transaction((connection) => {
+      const transaction = new SqliteRepositoryTransaction(connection);
+      recovered = this.runs.recoverStaleProcessing(work.runId, work.recoveredAt, transaction);
+      this.audit.appendCheckpoint(work.checkpoint, transaction);
+    });
+    return recovered;
   }
 }

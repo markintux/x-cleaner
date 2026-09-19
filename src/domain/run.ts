@@ -152,7 +152,7 @@ const runTransitions: Readonly<Record<CleaningRunStatus, readonly CleaningRunSta
   PAUSED: ["RUNNING", "FAILED", "INTERRUPTED"],
   COMPLETED: [],
   FAILED: [],
-  INTERRUPTED: []
+  INTERRUPTED: ["RUNNING"]
 };
 
 const batchTransitions: Readonly<Record<RunBatchStatus, readonly RunBatchStatus[]>> = {

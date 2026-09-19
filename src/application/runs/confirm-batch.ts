@@ -74,7 +74,7 @@ export class ConfirmBatch {
     if (run === null) {
       throw safetyError("RUN_NOT_FOUND");
     }
-    if (run.status === "COMPLETED" || run.status === "FAILED" || run.status === "INTERRUPTED") {
+    if (run.status === "COMPLETED" || run.status === "FAILED") {
       throw safetyError("RUN_NOT_RESUMABLE");
     }
     const account = input.account ?? input.detectedAccount ?? input.currentAccount;

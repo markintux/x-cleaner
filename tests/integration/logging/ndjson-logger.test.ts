@@ -41,7 +41,9 @@ describe("logger NDJSON local", () => {
       expect(text).not.toContain("CANARY_PASSWORD");
       expect(text).not.toContain("CANARY_COOKIE");
       expect(text).not.toContain("canary@example.invalid");
-      expect(path.relative(directory, logger.outputPath)).toBe("logs/audit.ndjson");
+      expect(path.relative(directory, logger.outputPath).replaceAll(path.sep, "/")).toBe(
+        "logs/audit.ndjson"
+      );
       expect(bytes.toString("utf8")).toContain("\n");
     } finally {
       await rm(directory, { recursive: true, force: true });

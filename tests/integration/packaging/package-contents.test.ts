@@ -111,7 +111,11 @@ async function runCommand(
   cwd: string
 ): Promise<ProcessResult> {
   try {
-    const result = await execFileAsync(command, [...arguments_], { cwd, maxBuffer: 4_000_000 });
+    const result = await execFileAsync(command, [...arguments_], {
+      cwd,
+      maxBuffer: 4_000_000,
+      shell: process.platform === "win32"
+    });
     return { code: 0, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
     const failure = error as { code?: number | string; stdout?: string; stderr?: string };

@@ -83,9 +83,9 @@ describe("relatórios agregados de execução", () => {
       const replacement = await writer.write(aggregate);
       expect(replacement.relativePath).toBe(first.relativePath);
       expect(replacement.sha256).toBe(first.sha256);
-      expect(path.relative(fixture.directory, replacement.absolutePath)).toBe(
-        replacement.relativePath
-      );
+      expect(
+        path.relative(fixture.directory, replacement.absolutePath).replaceAll(path.sep, "/")
+      ).toBe(replacement.relativePath);
       const bytes = await readFile(replacement.absolutePath);
       expect(createHash("sha256").update(bytes).digest("hex")).toBe(replacement.sha256);
       expect(fixture.database.connection.prepare("SELECT count(*) AS count FROM generated_reports").get()).toEqual({ count: 1 });

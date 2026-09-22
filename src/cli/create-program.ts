@@ -69,6 +69,7 @@ export function createProgram(dependencies: CliDependencies): Command {
     .command("run <planId>")
     .description(translate("cli.runDescription"))
     .option("--limit <number>", translate("cli.limitOption"))
+    .option("--release-stale-lock", translate("cli.releaseStaleLockOption"))
     .action(async (planId, options, command) => {
       await createRunCommand(dependencies)(planId, {
         ...options,
@@ -80,6 +81,7 @@ export function createProgram(dependencies: CliDependencies): Command {
     .command("resume <runId>")
     .description(translate("cli.resumeDescription"))
     .option("--limit <number>", translate("cli.limitOption"))
+    .option("--release-stale-lock", translate("cli.releaseStaleLockOption"))
     .action(async (runId, options, command) => {
       await createResumeCommand(dependencies)(runId, {
         ...options,

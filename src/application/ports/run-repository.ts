@@ -26,6 +26,8 @@ export interface RunRepository {
   getRunProgressRows?(runId: string): readonly RunProgressRow[];
   createBatch(batch: RunBatch, transaction?: RepositoryTransaction): void;
   getBatch(batchId: string): RunBatch | null;
+  /** Ordered batch projection; recovery uses it to find unclosed boundaries. */
+  listBatches?(runId: string): readonly RunBatch[];
   pageEligibleItems(
     runId: string,
     now: string,

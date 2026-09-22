@@ -29,6 +29,7 @@ export const ptBR: MessageCatalog = {
   "cli.fromOption": "limite inicial inclusivo",
   "cli.toOption": "limite final inclusivo",
   "cli.limitOption": "quantidade máxima desta confirmação",
+  "cli.releaseStaleLockOption": "remove um lock comprovadamente órfão deste host antes de executar",
   "cli.runDescription": "executa um plano revisado com nova confirmação",
   "cli.resumeDescription": "retoma uma execução com nova confirmação",
   "run.planId": "Plano revisado: {planId}",
@@ -42,6 +43,26 @@ export const ptBR: MessageCatalog = {
   "run.confirmInstruction": "Digite exatamente APAGAR para continuar.",
   "run.confirmQuestion": "Confirmação:",
   "run.resumeInstruction": "x-cleaner resume {runId}",
+  "run.progressItemStarted":
+    "[{position}/{total}] {type} ID {xInteractionId} — processando (tentativa {attemptNumber}).",
+  "run.progressItemFinished":
+    "[{position}/{total}] {type} ID {xInteractionId} — {outcome} em {durationMs}ms; fronteira persistida.",
+  "run.progressItemFailed":
+    "[{position}/{total}] {type} ID {xInteractionId} — {outcome} ({errorCode}) em {durationMs}ms; fronteira persistida.",
+  "run.progressWaiting":
+    "Aguardando {seconds}s antes do item {position}/{total}. Um Ctrl+C agora interrompe em uma fronteira já persistida; um segundo Ctrl+C encerra sem persistir nada.",
+  "run.recoveredUncleanStop":
+    "Parada não limpa detectada e reconciliada: checkpoint MANUAL_INTERRUPT registrado, {batches} lote(s) fechado(s) como INTERRUPTED e {items} item(ns) em voo devolvido(s) para PENDING.",
+  "run.lockActive":
+    "Outro executor está ativo neste diretório de dados (pid {pid}, host {hostname}, desde {acquiredAt}). Nada foi executado.",
+  "run.lockStale":
+    "Lock órfão encontrado (pid {pid}, host {hostname}, desde {acquiredAt}): esse processo não existe mais neste host. Nada foi executado.",
+  "run.lockStaleInstruction":
+    "Revise o estado com `x-cleaner status` e, se confirmar que nenhum executor está ativo, repita o comando com `--release-stale-lock`.",
+  "run.lockUnknown":
+    "O lock deste diretório de dados não pôde ser diagnosticado neste host. Nada foi executado; resolva manualmente antes de tentar de novo.",
+  "run.lockReleased": "Lock órfão removido após diagnóstico STALE.",
+  "run.lockNotStale": "O lock não está órfão neste host; nada foi removido.",
   "run.canceled": "Execução cancelada; nenhuma interação foi enviada à engine.",
   "run.completed": "Run {runId} concluído nesta etapa: {count} item(ns).",
   "run.batchCompleted":
@@ -51,6 +72,13 @@ export const ptBR: MessageCatalog = {
   "run.interrupted":
     "Execução interrompida com segurança. O estado confirmado foi preservado; use `x-cleaner resume {runId}`.",
   "status.dataDirectory": "Diretório local de dados: {dataDirectory}",
+  "status.lockNotHeld": "Executor: nenhum lock ativo neste diretório de dados.",
+  "status.lockActive":
+    "Executor: lock ATIVO (pid {pid}, host {hostname}, desde {acquiredAt}). Não inicie outra execução.",
+  "status.lockStale":
+    "Executor: lock ÓRFÃO (pid {pid}, host {hostname}, desde {acquiredAt}); o processo não existe mais neste host. Use `--release-stale-lock` em `run` ou `resume` para removê-lo.",
+  "status.lockUnknown":
+    "Executor: lock presente, mas não diagnosticável neste host. Resolva manualmente antes de executar.",
   "status.localOnlyNotice":
     "Seus arquivos, sessão, registros, pontos de controle e relatórios permanecem somente neste computador. Nenhuma conexão com o X foi realizada.",
   "status.account": "Conta local: @{handle}",

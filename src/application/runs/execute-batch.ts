@@ -3,6 +3,7 @@ import type { Clock } from "../ports/clock.js";
 import { recordAudit, type AuditLogger } from "../ports/audit-logger.js";
 import type { Delay } from "../ports/delay.js";
 import type { ExecutionUnitOfWork } from "../ports/execution-unit-of-work.js";
+import { reportProgress, type ExecutionProgressReporter } from "../ports/execution-progress.js";
 import type { ExecutorLockPort } from "../ports/executor-lock.js";
 import type { PlanRepository } from "../ports/plan-repository.js";
 import type { RunRepository } from "../ports/run-repository.js";
@@ -46,6 +47,8 @@ export interface ExecuteBatchOptions {
   readonly delayMilliseconds?: number;
   readonly retryPolicy?: RetryPolicy | RetryPolicyOptions;
   readonly signal?: ExecuteBatchSignal;
+  /** Optional operator feed; it never affects the durable outcome. */
+  readonly progress?: ExecutionProgressReporter;
 }
 
 export interface ExecuteBatchDependencies {
@@ -75,6 +78,7 @@ export class ExecuteBatch {
   readonly #delayMilliseconds: number;
   readonly #retryPolicy: RetryPolicy;
   readonly #signal: ExecuteBatchSignal | undefined;
+  readonly #progress: ExecutionProgressReporter | undefined;
 
   constructor(
     private readonly dependencies: ExecuteBatchDependencies,
@@ -88,6 +92,7 @@ export class ExecuteBatch {
         ? options.retryPolicy
         : new RetryPolicy(options.retryPolicy);
     this.#signal = options.signal;
+    this.#progress = options.progress;
     if (!Number.isFinite(this.#delayMilliseconds) || this.#delayMilliseconds < 0) {
       throw new Error("INVALID_DELAY");
     }
@@ -154,6 +159,12 @@ export class ExecuteBatch {
         }
 
         if (processedCount > 0 && this.#delay !== undefined && this.#delayMilliseconds > 0) {
+          reportProgress(this.#progress, {
+            kind: "WAITING",
+            milliseconds: this.#delayMilliseconds,
+            nextPosition: processedCount + 1,
+            total: batch.requestedLimit
+          });
           await this.#delay.wait(this.#delayMilliseconds);
           if (this.stopRequested()) {
             this.commitInterrupted(run, batch, startedAt, audit, unitOfWork);
@@ -182,6 +193,15 @@ export class ExecuteBatch {
             completedAt: null
           });
           const interaction = catalog.getInteraction(currentItem.interactionId);
+          const progressItem = {
+            position: processedCount + 1,
+            total: batch.requestedLimit,
+            sequence: currentItem.sequence,
+            type: interaction?.type ?? null,
+            xInteractionId: interaction?.xInteractionId ?? null,
+            attemptNumber
+          };
+          reportProgress(this.#progress, { kind: "ITEM_STARTED", ...progressItem });
           const outcome =
             interaction === null
               ? ({
@@ -270,6 +290,14 @@ export class ExecuteBatch {
             errorCode: errorCodeForOutcome(outcome)
           });
           resolveCurrentBoundary();
+          reportProgress(this.#progress, {
+            kind: "ITEM_FINISHED",
+            ...progressItem,
+            outcome: outcome.outcome,
+            status,
+            errorCode: errorCodeForOutcome(outcome),
+            durationMs: outcome.durationMs ?? 0
+          });
 
           if (paused) {
             itemFinished = true;

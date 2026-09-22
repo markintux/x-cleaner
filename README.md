@@ -38,6 +38,14 @@ Execuções reais aguardam pelo menos 5 segundos entre interações concluídas.
 intervalo cria uma fronteira visível para interrupção manual e não autoriza o
 próximo lote automaticamente.
 
+Durante a execução, cada item é impresso quando começa e quando sua fronteira é
+persistida, e o intervalo entre itens também é anunciado. O primeiro `Ctrl+C`
+para o agendamento e fecha o lote na última fronteira já persistida; o segundo
+encerra o processo de imediato e, de propósito, não persiste nada. Depois de uma
+parada não limpa, o `.executor.lock` sobrevive: consulte `x-cleaner status` e,
+confirmando que nenhum executor está ativo, repita o comando com
+`--release-stale-lock`. Ver `docs/troubleshooting.md`.
+
 ## Instalação a partir do código-fonte
 
 O projeto ainda não é instalado do npm. Em uma cópia autorizada do repositório:

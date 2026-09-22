@@ -34,6 +34,24 @@ diagnose `STALE` é evidência para investigação manual, não autorização pa
 assumir o lock. Lock inválido ou de outro host deve ser tratado como
 `UNKNOWN` e preservado até uma decisão segura.
 
+`run` e `resume` diagnosticam o lock antes de recuperar o estado e antes de
+pedir a confirmação destrutiva, então uma execução bloqueada nunca chega a pedir
+`APAGAR`. O comando `status` imprime o mesmo diagnóstico sem escrever nada.
+
+Um lock deixado por uma parada não limpa — por exemplo um segundo `Ctrl+C`, que
+encerra o processo de propósito sem persistir nada — aparece como `STALE`. Nesse
+caso, e somente depois de confirmar que nenhum executor está ativo, repita o
+comando com `--release-stale-lock`. A remoção rediagnostica o lock no mesmo
+instante e recusa qualquer estado que não seja `STALE`, de modo que um executor
+ativo nunca é despejado. A remoção não autoriza nada: a confirmação `APAGAR`
+continua obrigatória para o lote seguinte.
+
+A retomada seguinte reconcilia a parada não limpa: os itens em voo sem tentativa
+comprometida voltam para `PENDING`, os lotes que ficaram `RUNNING` são fechados
+como `INTERRUPTED`, o run vira `INTERRUPTED` e um checkpoint `MANUAL_INTERRUPT`
+é registrado. Esse checkpoint é reconstruído na recuperação, não observado no
+instante do sinal, porque o encerramento imediato não persiste nada.
+
 ## Archive incompatível
 
 Fixtures sintéticas validam o contrato do parser, não o formato de todo Archive

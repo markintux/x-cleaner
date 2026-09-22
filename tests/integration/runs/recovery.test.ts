@@ -102,6 +102,72 @@ describe("recuperação de runs", () => {
       expect(fixture.runs.getRunItem(items[2]!.id)?.status).toBe("PROCESSING");
       expect(result.checkpoint.sequence).toBe(1);
       expect(fixture.audit.listCheckpoints(run.id)).toHaveLength(1);
+      expect(result.uncleanStop).toBe(true);
+      expect(result.closedBatchIds).toEqual([batch.id]);
+      expect(result.checkpoint.reason).toBe("MANUAL_INTERRUPT");
+      expect(fixture.runs.getBatch(batch.id)).toMatchObject({
+        status: "INTERRUPTED",
+        finishedAt: "2026-03-04T05:07:07.000Z"
+      });
+      expect(fixture.runs.getRun(run.id)).toMatchObject({
+        status: "INTERRUPTED",
+        pauseReason: null,
+        finishedAt: "2026-03-04T05:07:07.000Z"
+      });
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("não inventa interrupção manual quando todos os lotes já fecharam", async () => {
+    const fixture = await createDatabaseFixture();
+    try {
+      const { accountId, importId } = seedCatalog(fixture);
+      const ids = [addInteraction(fixture, accountId, importId, 1)];
+      const plan = createPlan(fixture, accountId, ids);
+      const run: CleaningRun = {
+        id: "run-clean-pause",
+        planId: plan.id,
+        accountId,
+        boundHandle: "synthetic-1",
+        status: "PAUSED",
+        pauseReason: "RATE_LIMIT",
+        startedAt: fixedNow,
+        pausedAt: fixedNow,
+        finishedAt: null,
+        createdAt: fixedNow,
+        updatedAt: fixedNow
+      };
+      fixture.runs.createRun(run);
+      fixture.runs.createBatch({
+        id: "batch-clean-pause",
+        runId: run.id,
+        requestedLimit: 1,
+        confirmedAt: fixedNow,
+        status: "PAUSED",
+        startedAt: fixedNow,
+        finishedAt: fixedNow,
+        createdAt: fixedNow,
+        updatedAt: fixedNow
+      });
+
+      const result = new RecoverRun(
+        {
+          runs: fixture.runs,
+          audit: fixture.audit,
+          unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit)
+        },
+        { now: () => "2026-03-04T05:07:07.000Z" }
+      ).execute({ runId: run.id });
+
+      expect(result.uncleanStop).toBe(false);
+      expect(result.closedBatchIds).toEqual([]);
+      expect(result.checkpoint.reason).toBe("ITEM_COMMITTED");
+      expect(fixture.runs.getRun(run.id)).toMatchObject({
+        status: "PAUSED",
+        pauseReason: "RATE_LIMIT"
+      });
+      expect(fixture.runs.getBatch("batch-clean-pause")?.status).toBe("PAUSED");
     } finally {
       await fixture.cleanup();
     }

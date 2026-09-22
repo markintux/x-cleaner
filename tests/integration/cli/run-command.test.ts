@@ -10,6 +10,7 @@ import {
   seedCatalog
 } from "../../support/database.js";
 import { FakeCleanerEngine } from "../../support/fake-cleaner-engine.js";
+import { FakeDelay } from "../../support/fake-delay.js";
 import { FakePrompt } from "../../support/fake-prompt.js";
 import { createTranslator } from "../../../src/i18n/translator.js";
 import { UnitOfWork } from "../../../src/infrastructure/database/unit-of-work.js";
@@ -17,6 +18,130 @@ import { ExecutorLock } from "../../../src/infrastructure/lock/executor-lock.js"
 import { NdjsonLogger } from "../../../src/infrastructure/logging/ndjson-logger.js";
 
 describe("CLI run", () => {
+  it("mostra cada fronteira persistida e o intervalo antes do próximo item", async () => {
+    const fixture = await createDatabaseFixture();
+    try {
+      const { accountId, importId } = seedCatalog(fixture);
+      const managed = fixture.catalog.getManagedAccount()!;
+      fixture.catalog.upsertManagedAccount({
+        id: managed.id,
+        xUserId: managed.xUserId,
+        archiveHandle: managed.archiveHandle,
+        confirmedHandle: managed.archiveHandle,
+        confirmedAt: fixedNow
+      });
+      const plan = createPlan(fixture, accountId, [
+        addInteraction(fixture, accountId, importId, 1),
+        addInteraction(fixture, accountId, importId, 2)
+      ]);
+      const outputLines: string[] = [];
+      const delay = new FakeDelay();
+      const engine = new FakeCleanerEngine([
+        { kind: "COMPLETED", outcome: "COMPLETED", durationMs: 12 },
+        {
+          kind: "PERMANENT_FAILURE",
+          outcome: "FAILED",
+          errorCode: "DELETE_CONTROL_MISSING",
+          durationMs: 8
+        }
+      ]);
+      const program = createProgram({
+        output: { writeLine: (line) => outputLines.push(line) } satisfies CliOutput,
+        translator: createTranslator(),
+        repositoryFactory: () => ({
+          ...fixture,
+          unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
+          lock: new ExecutorLock(fixture.directory),
+          close: () => undefined
+        }),
+        run: {
+          prompt: new FakePrompt(["APAGAR"]),
+          currentAccount: { handle: managed.archiveHandle!, xUserId: managed.xUserId },
+          engine,
+          delay,
+          delayMilliseconds: 5000
+        }
+      });
+      program.exitOverride();
+      await program.parseAsync(["run", plan.id, "--limit", "2", "--data-dir", fixture.directory], {
+        from: "user"
+      });
+
+      const output = outputLines.join("\n");
+      expect(delay.calls).toEqual([5000]);
+      expect(output).toContain("[1/2] POST ID 900719925474099301 — processando (tentativa 1)");
+      expect(output).toContain("[1/2] POST ID 900719925474099301 — COMPLETED em 12ms");
+      expect(output).toContain("Aguardando 5s antes do item 2/2");
+      expect(output).toContain("um segundo Ctrl+C encerra sem persistir nada");
+      expect(output).toContain(
+        "[2/2] POST ID 900719925474099302 — FAILED (DELETE_CONTROL_MISSING) em 8ms"
+      );
+      expect(output).not.toContain("conteúdo sintético");
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
+  it("diagnostica lock órfão antes da confirmação e só remove com pedido explícito", async () => {
+    const fixture = await createDatabaseFixture();
+    try {
+      const { accountId, importId } = seedCatalog(fixture);
+      const managed = fixture.catalog.getManagedAccount()!;
+      fixture.catalog.upsertManagedAccount({
+        id: managed.id,
+        xUserId: managed.xUserId,
+        archiveHandle: managed.archiveHandle,
+        confirmedHandle: managed.archiveHandle,
+        confirmedAt: fixedNow
+      });
+      const plan = createPlan(fixture, accountId, [
+        addInteraction(fixture, accountId, importId, 1)
+      ]);
+      await new ExecutorLock(fixture.directory, { pid: () => 987_654 }).acquire();
+
+      const outputLines: string[] = [];
+      const prompt = new FakePrompt(["APAGAR"]);
+      const engine = new FakeCleanerEngine([{ kind: "COMPLETED", outcome: "COMPLETED" }]);
+      const dependencies = {
+        output: { writeLine: (line: string) => outputLines.push(line) },
+        translator: createTranslator(),
+        repositoryFactory: () => ({
+          ...fixture,
+          unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
+          lock: new ExecutorLock(fixture.directory, { isPidAlive: () => false }),
+          close: () => undefined
+        }),
+        run: {
+          prompt,
+          currentAccount: { handle: managed.archiveHandle!, xUserId: managed.xUserId },
+          engine
+        }
+      };
+
+      const blocked = createProgram(dependencies);
+      blocked.exitOverride();
+      await expect(
+        blocked.parseAsync(["run", plan.id, "--data-dir", fixture.directory], { from: "user" })
+      ).rejects.toThrow("EXECUTOR_LOCK_HELD");
+      expect(prompt.questions).toHaveLength(0);
+      expect(engine.calls).toHaveLength(0);
+      expect(outputLines.join("\n")).toContain("Lock órfão encontrado (pid 987654");
+      expect(outputLines.join("\n")).toContain("--release-stale-lock");
+
+      const released = createProgram(dependencies);
+      released.exitOverride();
+      await released.parseAsync(
+        ["run", plan.id, "--data-dir", fixture.directory, "--release-stale-lock"],
+        { from: "user" }
+      );
+      expect(outputLines.join("\n")).toContain("Lock órfão removido após diagnóstico STALE");
+      expect(prompt.questions).toHaveLength(1);
+      expect(engine.calls).toHaveLength(1);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("mostra aviso e handle, aceita somente APAGAR, respeita limite e não oferece bypass", async () => {
     const fixture = await createDatabaseFixture();
     try {

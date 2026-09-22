@@ -37,6 +37,16 @@ export interface CommitRecoveryWork {
   readonly runId: string;
   readonly recoveredAt: string;
   readonly checkpoint: NewRunCheckpoint;
+  /** Batches an unclean stop left RUNNING, closed at this same boundary. */
+  readonly batches?: readonly {
+    readonly id: string;
+    readonly status: RunBatch["status"];
+    readonly finishedAt: string | null;
+  }[];
+  readonly run?: {
+    readonly status: CleaningRun["status"];
+    readonly state: Pick<CleaningRun, "pauseReason" | "startedAt" | "pausedAt" | "finishedAt">;
+  };
 }
 
 export interface ExecutionUnitOfWork {

@@ -14,6 +14,8 @@ import {
 } from "../dependencies.js";
 import type { CleanerEngine } from "../../application/ports/cleaner-engine.js";
 import type { ExecuteBatchResult } from "../../application/runs/execute-batch.js";
+import type { ExecutorLockPort } from "../../application/ports/executor-lock.js";
+import { CliExecutionProgress } from "../execution-progress.js";
 import { ProcessSignals } from "../../platform/process-signals.js";
 import { SystemDelay } from "../../platform/delay.js";
 import { GetRunProgress } from "../../application/progress/get-run-progress.js";
@@ -24,6 +26,8 @@ import { ReadlinePrompt } from "../prompt.js";
 export interface RunCommandOptions {
   readonly dataDir?: string;
   readonly limit?: string | number;
+  /** Owner-explicit recovery for a lock left behind by an unclean stop. */
+  readonly releaseStaleLock?: boolean;
 }
 
 export interface RunCommandResult {
@@ -55,6 +59,11 @@ async function executeCommand(
   const repositories = await openCliRepositories(dependencies, dataDirectory);
   try {
     const services = requireRunRepositories(repositories);
+    const lock = dependencies.run?.lock ?? services.lock;
+    // The lock is diagnosed before recovery and before the destructive
+    // confirmation, so a live executor is never reconciled underneath and the
+    // owner never types the confirmation phrase into a command that cannot run.
+    await assertExecutorLockAvailable(lock, dependencies, options.releaseStaleLock === true);
     const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
     const limit = parseLimit(options.limit);
     const commandClock = dependencies.run?.clock ?? dependencies.clock;
@@ -75,10 +84,18 @@ async function executeCommand(
       if (services.audit === undefined || services.unitOfWork === undefined) {
         throw new Error("EXECUTION_SERVICES_NOT_CONFIGURED");
       }
-      new RecoverRun(
+      const recovery = new RecoverRun(
         { runs: services.runs, audit: services.audit, unitOfWork: services.unitOfWork },
         commandClock === undefined ? {} : { clock: commandClock }
       ).execute({ runId: run.id });
+      if (recovery.uncleanStop) {
+        dependencies.output.writeLine(
+          dependencies.translator.translate("run.recoveredUncleanStop", {
+            batches: recovery.closedBatchIds.length,
+            items: recovery.recoveredCount
+          })
+        );
+      }
       run = requireRun(services.runs.getRun(run.id));
       account = await resolveCurrentAccount(dependencies, dataDirectory);
       if (account === undefined) {
@@ -148,7 +165,6 @@ async function executeCommand(
       return { canceled: true, runId: run.id, batchId: null, processedCount: 0 };
     }
 
-    const lock = dependencies.run?.lock ?? services.lock;
     if (lock === undefined || services.unitOfWork === undefined || services.audit === undefined) {
       throw new Error("EXECUTION_SERVICES_NOT_CONFIGURED");
     }
@@ -164,7 +180,13 @@ async function executeCommand(
     const executionOptions = {
       ...(commandClock === undefined ? {} : { clock: commandClock }),
       delay: dependencies.run?.delay ?? dependencies.delay ?? new SystemDelay(),
-      delayMilliseconds: dependencies.run?.delayMilliseconds ?? 0
+      delayMilliseconds: dependencies.run?.delayMilliseconds ?? 0,
+      progress:
+        dependencies.run?.progress ??
+        new CliExecutionProgress({
+          translator: dependencies.translator,
+          writeLine: (message) => dependencies.output.writeLine(message)
+        })
     };
     const signals =
       dependencies.run?.signalFactory?.(run.id) ??
@@ -232,6 +254,47 @@ async function executeCommand(
   } finally {
     repositories.close?.();
   }
+}
+
+/**
+ * Diagnoses the filesystem lock without ever taking it over implicitly. A
+ * stale file is only removed when the owner asks for it in the same command.
+ */
+async function assertExecutorLockAvailable(
+  lock: ExecutorLockPort | undefined,
+  dependencies: CliDependencies,
+  releaseStaleLock: boolean
+): Promise<void> {
+  if (lock?.diagnoseStaleLock === undefined) return;
+  let diagnosis = await lock.diagnoseStaleLock();
+  if (diagnosis === "STALE" && releaseStaleLock) {
+    const released = (await lock.releaseStaleLock?.()) ?? false;
+    dependencies.output.writeLine(
+      dependencies.translator.translate(released ? "run.lockReleased" : "run.lockNotStale")
+    );
+    diagnosis = await lock.diagnoseStaleLock();
+  }
+  if (diagnosis === "NOT_HELD") return;
+  if (diagnosis === "UNKNOWN") {
+    dependencies.output.writeLine(dependencies.translator.translate("run.lockUnknown"));
+    throw executorLockHeldError();
+  }
+  const owner = (await lock.readStatus?.()) ?? null;
+  dependencies.output.writeLine(
+    dependencies.translator.translate(diagnosis === "ACTIVE" ? "run.lockActive" : "run.lockStale", {
+      pid: owner?.pid ?? "?",
+      hostname: owner?.hostname ?? "?",
+      acquiredAt: owner?.acquiredAt ?? "?"
+    })
+  );
+  if (diagnosis === "STALE") {
+    dependencies.output.writeLine(dependencies.translator.translate("run.lockStaleInstruction"));
+  }
+  throw executorLockHeldError();
+}
+
+function executorLockHeldError(): Error {
+  return Object.assign(new Error("EXECUTOR_LOCK_HELD"), { code: "EXECUTOR_LOCK_HELD" });
 }
 
 async function closeEngine(engine: CleanerEngine): Promise<void> {

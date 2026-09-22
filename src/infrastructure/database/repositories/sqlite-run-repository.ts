@@ -161,6 +161,13 @@ export class SqliteRunRepository implements RunRepository {
     return row === undefined ? null : mapBatch(row as Row);
   }
 
+  listBatches(runId: string): readonly RunBatch[] {
+    return this.database.connection
+      .prepare("SELECT * FROM run_batches WHERE run_id = ? ORDER BY created_at, id")
+      .all(runId)
+      .map((row) => mapBatch(row as Row));
+  }
+
   pageEligibleItems(
     runId: string,
     now: string,

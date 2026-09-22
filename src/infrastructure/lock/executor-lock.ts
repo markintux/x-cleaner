@@ -3,7 +3,12 @@ import { mkdir, open, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { ExecutorLockPort } from "../../application/ports/executor-lock.js";
+import type {
+  ExecutorLockPort,
+  StaleLockDiagnosis
+} from "../../application/ports/executor-lock.js";
+
+export type { StaleLockDiagnosis } from "../../application/ports/executor-lock.js";
 
 export interface ExecutorLockMetadata {
   readonly pid: number;
@@ -19,8 +24,6 @@ export interface ExecutorLockLease {
   readonly metadata: ExecutorLockMetadata;
   release(): Promise<void>;
 }
-
-export type StaleLockDiagnosis = "NOT_HELD" | "ACTIVE" | "STALE" | "UNKNOWN";
 
 export class ExecutorLockHeldError extends Error {
   readonly code = "EXECUTOR_LOCK_HELD";
@@ -119,6 +122,25 @@ export class ExecutorLock implements ExecutorLockPort {
       return "UNKNOWN";
     }
     return this.#isPidAlive(metadata.pid) ? "ACTIVE" : "STALE";
+  }
+
+  /**
+   * Owner-explicit stale recovery. It re-diagnoses inside the same call and
+   * refuses every state but `STALE`, so an active executor is never evicted.
+   */
+  async releaseStaleLock(): Promise<boolean> {
+    if ((await this.diagnoseStaleLock()) !== "STALE") {
+      return false;
+    }
+    try {
+      await rm(this.#lockPath, { force: false });
+      return true;
+    } catch (error: unknown) {
+      if (isNotFound(error)) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   private async readStoredLock(): Promise<StoredExecutorLock | null> {

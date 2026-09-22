@@ -53,6 +53,10 @@ async function runLogin(
   const now = dependencies.clock?.now.bind(dependencies.clock) ?? defaultNow;
   dependencies.output.writeLine(dependencies.translator.translate("session.localGuidance"));
   dependencies.output.writeLine(dependencies.translator.translate("session.loginStarted"));
+  dependencies.output.writeLine(dependencies.translator.translate("session.loginWindowGuidance"));
+  dependencies.output.writeLine(
+    dependencies.translator.translate("session.loginAlternativeGuidance")
+  );
 
   const loginSessionFactory = dependencies.session?.createLoginSession;
   if (loginSessionFactory === undefined) throw new Error("SESSION_SERVICE_NOT_CONFIGURED");

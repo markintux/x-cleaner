@@ -37,12 +37,15 @@ export const ptBR: MessageCatalog = {
     "Tipos selecionados: POST={posts}; REPLY={replies}; REPOST={reposts}; LIKE={likes}",
   "run.total": "Total: {count}",
   "run.account": "Conta vinculada: @{handle}",
+  "run.items": "Itens exatos deste lote:\n{items}",
   "run.warning": "AVISO: esta ação é irreversível e altera sua conta no X.",
   "run.confirmInstruction": "Digite exatamente APAGAR para continuar.",
   "run.confirmQuestion": "Confirmação:",
   "run.resumeInstruction": "x-cleaner resume {runId}",
   "run.canceled": "Execução cancelada; nenhuma interação foi enviada à engine.",
   "run.completed": "Run {runId} concluído nesta etapa: {count} item(ns).",
+  "run.batchCompleted":
+    "Execução pausada após concluir o lote autorizado. Ainda há itens pendentes; uma nova autorização é obrigatória para continuar com `x-cleaner resume {runId}`.",
   "run.paused":
     "Execução pausada por {reason}; o estado foi salvo. Resolva a situação manualmente e use `x-cleaner resume {runId}`.",
   "run.interrupted":
@@ -84,7 +87,12 @@ export const ptBR: MessageCatalog = {
   "cli.sessionClearDescription": "remove somente o perfil de navegador dedicado",
   "session.localGuidance":
     "A sessão fica somente neste computador. O navegador visível abrirá o site oficial do X; faça o login diretamente nele e não digite sua senha no terminal.",
-  "session.loginStarted": "Aguardando autenticação manual no navegador visível.",
+  "session.loginStarted":
+    "O Chrome comum será aberto com o perfil dedicado do X Cleaner para autenticação manual.",
+  "session.loginWindowGuidance":
+    "Conclua o login no X e feche todas as janelas desse perfil dedicado. Depois disso, o X Cleaner validará a sessão por até 5 minutos.",
+  "session.loginAlternativeGuidance":
+    "Se aparecer QR Code ou passkey e o celular não concluir o acesso, escolha uma opção oficial alternativa, como usar a senha. O X Cleaner não lê credenciais nem contorna verificações.",
   "session.profile": "Perfil dedicado da sessão: {profileDirectory}",
   "session.detectedAccount": "Conta detectada: @{handle}",
   "session.confirmQuestion": "Confirmar esta conta para este diretório? [s/N]",

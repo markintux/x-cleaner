@@ -6,6 +6,7 @@ import { chromium, type Browser, type Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AccountPage } from "../../../src/infrastructure/browser/x/account-page.js";
+import { isXLoginUrl } from "../../../src/infrastructure/browser/x/selectors.js";
 
 describe("AccountPage em fixtures HTML locais", () => {
   let browser: Browser;
@@ -54,6 +55,11 @@ describe("AccountPage em fixtures HTML locais", () => {
     return new AccountPage(page);
   }
 
+  it("reconhece o fluxo de login atual sem confundir outros modos de onboarding", () => {
+    expect(isXLoginUrl("https://x.com/i/jf/onboarding/web?mode=login")).toBe(true);
+    expect(isXLoginUrl("https://x.com/i/jf/onboarding/web?mode=signup")).toBe(false);
+  });
+
   it("detecta handle e ID estável por evidência semântica", async () => {
     const result = await (
       await accountPage(`
@@ -74,11 +80,18 @@ describe("AccountPage em fixtures HTML locais", () => {
     const unauthenticated = await (
       await accountPage('<a data-testid="login" href="/login">Entrar</a>')
     ).detect();
+    const currentLoginForm = await (
+      await accountPage('<input name="username_or_email" autocomplete="username webauthn">')
+    ).detect();
     const expired = await (
       await accountPage('<div data-session-expired="true">Sessão expirada</div>')
     ).detect();
 
     expect(unauthenticated).toMatchObject({ status: "UNAUTHENTICATED", reason: "LOGIN_REQUIRED" });
+    expect(currentLoginForm).toMatchObject({
+      status: "UNAUTHENTICATED",
+      reason: "LOGIN_REQUIRED"
+    });
     expect(expired).toMatchObject({ status: "UNAUTHENTICATED", reason: "SESSION_EXPIRED" });
   });
 
@@ -92,5 +105,18 @@ describe("AccountPage em fixtures HTML locais", () => {
 
     expect(challenge).toMatchObject({ status: "SECURITY_CHALLENGE" });
     expect(unknown).toMatchObject({ status: "UNKNOWN_STATE" });
+  });
+
+  it("reconhece a recusa temporária de login do X como desafio de segurança", async () => {
+    const detection = await (
+      await accountPage(
+        "<main>Desculpe, você não tem permissão para fazer login no momento.</main>"
+      )
+    ).detect();
+
+    expect(detection).toMatchObject({
+      status: "SECURITY_CHALLENGE",
+      reason: "SECURITY_CHALLENGE"
+    });
   });
 });

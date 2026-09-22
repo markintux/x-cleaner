@@ -147,18 +147,18 @@ export class ExecuteBatch {
           this.commitInterrupted(run, batch, startedAt, audit, unitOfWork);
           break;
         }
+        const item = selectNextItem(runs, { batch, runId: run.id, now: this.#now() });
+        if (item === null) {
+          this.commitBatchCompletion(run, batch, startedAt, audit, unitOfWork);
+          break;
+        }
+
         if (processedCount > 0 && this.#delay !== undefined && this.#delayMilliseconds > 0) {
           await this.#delay.wait(this.#delayMilliseconds);
           if (this.stopRequested()) {
             this.commitInterrupted(run, batch, startedAt, audit, unitOfWork);
             break;
           }
-        }
-
-        const item = selectNextItem(runs, { batch, runId: run.id, now: this.#now() });
-        if (item === null) {
-          this.commitBatchCompletion(run, batch, startedAt, audit, unitOfWork);
-          break;
         }
 
         let currentItem = item;

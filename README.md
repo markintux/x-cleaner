@@ -20,12 +20,23 @@ sem uma autorização separada depois dos gates de validação.
 - macOS, Linux ou Windows.
 - Chromium do Playwright instalado para comandos que abrem a sessão visível:
   `npx playwright install chromium`.
+- Se esse binário não estiver disponível, o CLI pode usar uma instalação local
+  do Google Chrome, ainda com o perfil dedicado do X Cleaner e sem reutilizar o
+  perfil cotidiano.
 - Uma conta própria no X e o X Archive oficial baixado pelo fluxo de configurações
   da própria conta. O X Cleaner nunca solicita nem armazena a senha.
 
 O fluxo de sessão abre o navegador visível e usa um perfil dedicado. Não use o
 perfil cotidiano do Chrome, não compartilhe cookies e não tente contornar
 CAPTCHA, desafios ou limites de taxa.
+
+Durante `session login`, o Google Chrome comum abre primeiro com esse perfil
+dedicado. Conclua o login e feche a janela; em seguida, o X Cleaner reutiliza o
+mesmo perfil via Playwright somente para validar a sessão e identificar a conta.
+
+Execuções reais aguardam pelo menos 5 segundos entre interações concluídas. O
+intervalo cria uma fronteira visível para interrupção manual e não autoriza o
+próximo lote automaticamente.
 
 ## Instalação a partir do código-fonte
 

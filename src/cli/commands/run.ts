@@ -122,6 +122,15 @@ async function executeCommand(
           dependencies.translator.translate("run.total", { count: summary.totalCount }),
         account: (summary: BatchConfirmationSummary) =>
           dependencies.translator.translate("run.account", { handle: summary.handle }),
+        items: (summary: BatchConfirmationSummary) =>
+          dependencies.translator.translate("run.items", {
+            items: summary.items
+              .map(
+                (item) =>
+                  `- ${item.type} | ID ${item.xInteractionId} | data ${item.interactionCreatedAt ?? "SEM_DATA"}`
+              )
+              .join("\n")
+          }),
         warning: dependencies.translator.translate("run.warning"),
         instruction: dependencies.translator.translate("run.confirmInstruction"),
         question: dependencies.translator.translate("run.confirmQuestion")
@@ -154,7 +163,8 @@ async function executeCommand(
     }
     const executionOptions = {
       ...(commandClock === undefined ? {} : { clock: commandClock }),
-      delay: dependencies.run?.delay ?? dependencies.delay ?? new SystemDelay()
+      delay: dependencies.run?.delay ?? dependencies.delay ?? new SystemDelay(),
+      delayMilliseconds: dependencies.run?.delayMilliseconds ?? 0
     };
     const signals =
       dependencies.run?.signalFactory?.(run.id) ??
@@ -192,10 +202,14 @@ async function executeCommand(
     }
     if (result.run.status === "PAUSED") {
       dependencies.output.writeLine(
-        dependencies.translator.translate("run.paused", {
-          runId: result.run.id,
-          reason: result.run.pauseReason ?? "UNKNOWN_UI"
-        })
+        result.run.pauseReason === null
+          ? dependencies.translator.translate("run.batchCompleted", {
+              runId: result.run.id
+            })
+          : dependencies.translator.translate("run.paused", {
+              runId: result.run.id,
+              reason: result.run.pauseReason
+            })
       );
     } else if (result.run.status === "INTERRUPTED") {
       dependencies.output.writeLine(

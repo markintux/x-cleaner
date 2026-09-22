@@ -1,4 +1,5 @@
 import { openAsBlob } from "node:fs";
+import { open } from "node:fs/promises";
 import path from "node:path";
 
 import { BlobReader, ZipReader, type Entry, type FileEntry } from "@zip-js/zip-js";
@@ -30,6 +31,9 @@ export interface ZipArchiveSourceOptions extends ZipEntryPolicyOptions {
 }
 
 const DEFAULT_MAX_APPENDED_DATA_SIZE = 1024 * 1024;
+const TRAILING_CENTRAL_DIRECTORY_WARNING = "trailing central directory data";
+const REDUNDANT_ZIP64_END_RECORD_BYTES = 76;
+const REDUNDANT_ZIP64_PROBE_BYTES = REDUNDANT_ZIP64_END_RECORD_BYTES + 4;
 
 /**
  * A read-only, non-extracting ZIP source. Each operation owns a ZipReader and
@@ -118,11 +122,28 @@ export class ZipArchiveSource implements ArchiveSource {
     try {
       const blob = await openAsBlob(this.#filename);
       reader = new ZipReader(new BlobReader(blob), {
-        strictness: "strict",
+        strictness: "balanced",
+        filenameValidation: "strict",
+        normalizeFilename: normalizeZipEntryName,
+        checkLocalDirectory: true,
+        checkLocalFilename: true,
         maxAppendedDataSize: this.#maxAppendedDataSize
       });
       const entries = await reader.getEntries();
-      assertNoForbiddenArchiveWarnings(reader.warnings);
+      const warnings = reader.warnings ?? [];
+      const permitsRedundantZip64 =
+        warnings.some(({ reason }) => reason === TRAILING_CENTRAL_DIRECTORY_WARNING) &&
+        (await hasConsistentRedundantZip64EndRecords(
+          this.#filename,
+          reader.directoryOffset,
+          reader.directoryLength,
+          entries.length
+        ));
+      assertNoForbiddenArchiveWarnings(
+        permitsRedundantZip64
+          ? warnings.filter(({ reason }) => reason !== TRAILING_CENTRAL_DIRECTORY_WARNING)
+          : warnings
+      );
       const validated = validateZipEntries(
         entries as readonly (Entry & ZipEntryMetadata)[],
         this.#policyOptions
@@ -184,6 +205,59 @@ export class ZipArchiveSource implements ArchiveSource {
       output.releaseLock();
     }
   }
+}
+
+async function hasConsistentRedundantZip64EndRecords(
+  filename: string,
+  directoryOffset: number | undefined,
+  directoryLength: number | undefined,
+  entryCount: number
+): Promise<boolean> {
+  if (
+    directoryOffset === undefined ||
+    directoryLength === undefined ||
+    !Number.isSafeInteger(directoryOffset) ||
+    !Number.isSafeInteger(directoryLength) ||
+    !Number.isSafeInteger(entryCount) ||
+    directoryOffset < 0 ||
+    directoryLength < 0 ||
+    entryCount < 0
+  ) {
+    return false;
+  }
+
+  const recordsOffset = directoryOffset + directoryLength;
+  if (!Number.isSafeInteger(recordsOffset)) return false;
+
+  const bytes = Buffer.alloc(REDUNDANT_ZIP64_PROBE_BYTES);
+  const handle = await open(filename, "r");
+  try {
+    const { bytesRead } = await handle.read(bytes, 0, bytes.length, recordsOffset);
+    if (bytesRead !== bytes.length) return false;
+  } finally {
+    await handle.close();
+  }
+
+  const zip64EndSignature = 0x06064b50;
+  const zip64LocatorSignature = 0x07064b50;
+  const classicEndSignature = 0x06054b50;
+  const expectedEntries = BigInt(entryCount);
+
+  return (
+    bytes.readUInt32LE(0) === zip64EndSignature &&
+    bytes.readBigUInt64LE(4) === 44n &&
+    bytes.readUInt32LE(16) === 0 &&
+    bytes.readUInt32LE(20) === 0 &&
+    bytes.readBigUInt64LE(24) === expectedEntries &&
+    bytes.readBigUInt64LE(32) === expectedEntries &&
+    bytes.readBigUInt64LE(40) === BigInt(directoryLength) &&
+    bytes.readBigUInt64LE(48) === BigInt(directoryOffset) &&
+    bytes.readUInt32LE(56) === zip64LocatorSignature &&
+    bytes.readUInt32LE(60) === 0 &&
+    bytes.readBigUInt64LE(64) === BigInt(recordsOffset) &&
+    bytes.readUInt32LE(72) === 1 &&
+    bytes.readUInt32LE(REDUNDANT_ZIP64_END_RECORD_BYTES) === classicEndSignature
+  );
 }
 
 interface ZipReaderState {

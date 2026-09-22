@@ -57,6 +57,10 @@ describe("x-cleaner session", () => {
     await program.parseAsync(["session", "login", "--data-dir", dataDirectory], { from: "user" });
 
     expect(lines.join("\n")).toContain("site oficial do X");
+    expect(lines.join("\n")).toContain("Chrome comum");
+    expect(lines.join("\n")).toContain("feche todas as janelas");
+    expect(lines.join("\n")).toContain("por até 5 minutos");
+    expect(lines.join("\n")).toContain("QR Code ou passkey");
     expect(lines.join("\n")).toContain("Conta detectada: @exemplo");
     expect(lines.join("\n")).toContain("confirmada");
     expect(promptQuestions).toHaveLength(1);

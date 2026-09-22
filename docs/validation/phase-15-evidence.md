@@ -1,8 +1,8 @@
 # Evidência sanitizada da Fase 15
 
 **Estado:** `PENDENTE` / `NOT-CODE`  
-**Archive real:** `NÃO DISPONÍVEL`  
-**Ações destrutivas:** `NÃO EXECUTADAS`  
+**Archive real:** `DISPONÍVEL LOCALMENTE`
+**Ações destrutivas:** `1 ITEM E LOTE DE 3 CONCLUÍDOS E VERIFICADOS`
 **Publicação:** `BLOQUEADA`
 
 Este registro contém somente resultados mecânicos e sanitizados observados
@@ -13,7 +13,7 @@ runbook, as autorizações ao vivo ou a aprovação do proprietário.
 
 | Verificação | Resultado | Escopo sanitizado |
 |---|---|---|
-| `npm run check` | `PASSOU` | 43 arquivos de teste, 184 testes; typecheck, lint, formatação e build passaram |
+| `npm run check` | `PASSOU` | 46 arquivos de teste, 199 testes; typecheck, lint, formatação e build passaram |
 | `npm run test:coverage` | `PASSOU` | 43 arquivos de teste, 184 testes; statements 77.91%, branches 68.92%, functions 79.14%, lines 78.96% |
 | `npm pack --dry-run` | `PASSOU` | 196 arquivos no pacote privado; sem publicação |
 | `npm run check:private-artifacts` | `PASSOU` | Nenhuma violação encontrada; caminho local omitido |
@@ -41,12 +41,12 @@ gate desta fase.
 
 ## Gates manuais
 
-- [ ] Archive local adquirido e checksum registrado: `PENDENTE`.
-- [ ] Import offline, contagens e decisão do adapter: `PENDENTE`.
-- [ ] Sessão dedicada e correspondência da conta: `PENDENTE`.
-- [ ] Dry-run e revisão do plano exato: `PENDENTE`.
-- [ ] Exatamente um item com autorização nova e verificação no X: `PENDENTE`.
-- [ ] Lote pequeno com autorização nova e verificação no X: `PENDENTE`.
+- [x] Archive local adquirido e checksum registrado: `CONCLUÍDO`.
+- [x] Import offline, contagens e decisão do adapter: `COMPATÍVEL`; 557 interações normalizadas.
+- [x] Sessão dedicada e correspondência da conta: `MATCH`.
+- [x] Dry-run e revisão do plano exato: `PASSOU`; plano somente de `POST`, 268 itens.
+- [x] Exatamente um item com autorização nova e verificação no X: `COMPLETED`; página posteriormente confirmou item inexistente.
+- [x] Lote pequeno com autorização nova e verificação no X: `COMPLETED`; limite 3, três outcomes `COMPLETED`, zero erros e três verificações independentes de item inexistente.
 - [ ] Interrupção `Ctrl+C`, checkpoint e resume: `PENDENTE`.
 - [ ] Relatório final e revisão de privacidade: `PENDENTE`.
 - [ ] Aprovação final do proprietário: `PENDENTE`.

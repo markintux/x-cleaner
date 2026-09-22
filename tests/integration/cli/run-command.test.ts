@@ -56,8 +56,14 @@ describe("CLI run", () => {
       });
       expect(prompt.messages.join("\n")).toContain("irreversível");
       expect(prompt.messages.join("\n")).toContain(`@${account.handle}`);
+      expect(prompt.messages.join("\n")).toContain("Total: 1");
+      expect(prompt.messages.join("\n")).toContain("ID 900719925474099301");
+      expect(prompt.messages.join("\n")).toContain(`data ${fixedNow}`);
+      expect(prompt.messages.join("\n")).not.toContain("ID 900719925474099302");
       expect(prompt.questions.join("\n")).toContain("Confirmação");
       expect(engine.calls).toHaveLength(1);
+      expect(outputLines.join("\n")).toContain("Execução pausada após concluir o lote autorizado");
+      expect(outputLines.join("\n")).not.toContain("UNKNOWN_UI");
       expect(program.helpInformation()).not.toMatch(/--(?:yes|force|skip-confirm|no-confirm)/iu);
       const audit = await import("node:fs/promises").then(({ readFile }) =>
         readFile(auditLogger.outputPath, "utf8")

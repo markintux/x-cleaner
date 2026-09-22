@@ -5,6 +5,8 @@ import { chromium, type BrowserContext, type BrowserType } from "playwright";
 import type { BrowserContextFactoryPort } from "./browser-session.js";
 import { dedicatedBrowserProfileDirectory } from "./session-path.js";
 
+const NATIVE_CREDENTIAL_STORE_ARGS = ["--use-mock-keychain", "--password-store=basic"];
+
 export {
   BROWSER_PROFILE_DIRECTORY_NAME,
   dedicatedBrowserProfileDirectory
@@ -47,14 +49,28 @@ export class BrowserContextFactory implements DedicatedBrowserContextFactory {
 
   async launch(): Promise<BrowserContext> {
     await mkdir(this.profileDirectory, { recursive: true });
-    return this.#browser.launchPersistentContext(this.profileDirectory, {
-      headless: false
-    });
+    try {
+      return await this.#browser.launchPersistentContext(this.profileDirectory, {
+        headless: false,
+        ignoreDefaultArgs: NATIVE_CREDENTIAL_STORE_ARGS
+      });
+    } catch (error) {
+      if (!isMissingBrowserExecutable(error)) throw error;
+      return this.#browser.launchPersistentContext(this.profileDirectory, {
+        headless: false,
+        channel: "chrome",
+        ignoreDefaultArgs: NATIVE_CREDENTIAL_STORE_ARGS
+      });
+    }
   }
 
   create(): Promise<BrowserContext> {
     return this.launch();
   }
+}
+
+function isMissingBrowserExecutable(error: unknown): boolean {
+  return error instanceof Error && /Executable doesn't exist/u.test(error.message);
 }
 
 export function createBrowserContextFactory(

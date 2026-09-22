@@ -75,6 +75,7 @@ export interface RunCliDependencies {
   readonly getCurrentAccount?: (dataDirectory: string) => Promise<DetectedAccount | null>;
   readonly clock?: Clock;
   readonly delay?: Delay;
+  readonly delayMilliseconds?: number;
   readonly lock?: ExecutorLockPort;
   readonly signalFactory?: (runId: string) => CliSignalAdapter;
   readonly createBrowserEngine?: (options: BrowserEngineOptions) => CleanerEngine;

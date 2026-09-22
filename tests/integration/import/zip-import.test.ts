@@ -119,6 +119,62 @@ describe("importação segura de ZIP", () => {
     }
   });
 
+  it("aceita separadores duplicados inofensivos sem relaxar a validação estrutural", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-zip-normalized-name-"));
+    const zipPath = path.join(workspace, "archive.zip");
+    try {
+      const writer = new ZipWriter(new Uint8ArrayWriter());
+      await writer.add("archive//data//", undefined, { directory: true });
+      await writer.add(
+        "archive//data//account.js",
+        new Uint8ArrayReader(
+          Buffer.from(
+            'window.YTD.account.part0 = [{"account":{"accountId":"101","userName":"@synthetic"}}];',
+            "utf8"
+          )
+        )
+      );
+      await writeFile(zipPath, await writer.close());
+
+      const source = new ZipArchiveSource(zipPath);
+      expect(await source.entries()).toEqual([
+        expect.objectContaining({ name: "archive/data/account.js" })
+      ]);
+      await expect(source.readText("archive/data/account.js")).resolves.toContain(
+        "window.YTD.account"
+      );
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it("aceita somente registros ZIP64 redundantes consistentes antes do EOCD clássico", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-zip64-redundant-"));
+    const zipPath = path.join(workspace, "redundant.zip");
+    const ambiguousPath = path.join(workspace, "ambiguous.zip");
+    try {
+      await writeZipFromDirectory(syntheticFixture, zipPath, true);
+      const redundant = await readFile(zipPath);
+      replaceClassicEndFieldsWithZip64Values(redundant);
+      await writeFile(zipPath, redundant);
+
+      await expect(new ZipArchiveSource(zipPath).entries()).resolves.toHaveLength(3);
+
+      const endOffset = findEndOfCentralDirectory(redundant);
+      const ambiguous = Buffer.concat([
+        redundant.subarray(0, endOffset),
+        Buffer.from([0x00]),
+        redundant.subarray(endOffset)
+      ]);
+      await writeFile(ambiguousPath, ambiguous);
+      await expect(new ZipArchiveSource(ambiguousPath).entries()).rejects.toThrow(
+        "ARCHIVE_AMBIGUOUS"
+      );
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
   it("falha antes de consumir conteúdo quando limites são excedidos", async () => {
     const workspace = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-zip-limit-"));
     const zipPath = path.join(workspace, "archive.zip");
@@ -247,6 +303,28 @@ async function writeZipWithEntry(
     offset = bytes.indexOf(originalBytes, offset + replacementBytes.length);
   }
   await writeFile(zipPath, bytes);
+}
+
+function replaceClassicEndFieldsWithZip64Values(bytes: Buffer): void {
+  const endOffset = findEndOfCentralDirectory(bytes);
+  const locatorOffset = endOffset - 20;
+  expect(bytes.readUInt32LE(locatorOffset)).toBe(0x07064b50);
+  const zip64Offset = Number(bytes.readBigUInt64LE(locatorOffset + 8));
+  expect(bytes.readUInt32LE(zip64Offset)).toBe(0x06064b50);
+
+  bytes.writeUInt16LE(0, endOffset + 4);
+  bytes.writeUInt16LE(0, endOffset + 6);
+  bytes.writeUInt16LE(Number(bytes.readBigUInt64LE(zip64Offset + 24)), endOffset + 8);
+  bytes.writeUInt16LE(Number(bytes.readBigUInt64LE(zip64Offset + 32)), endOffset + 10);
+  bytes.writeUInt32LE(Number(bytes.readBigUInt64LE(zip64Offset + 40)), endOffset + 12);
+  bytes.writeUInt32LE(Number(bytes.readBigUInt64LE(zip64Offset + 48)), endOffset + 16);
+}
+
+function findEndOfCentralDirectory(bytes: Buffer): number {
+  for (let offset = bytes.length - 22; offset >= 0; offset -= 1) {
+    if (bytes.readUInt32LE(offset) === 0x06054b50) return offset;
+  }
+  throw new Error("TEST_EOCD_NOT_FOUND");
 }
 
 async function filesIn(directory: string): Promise<readonly { absolute: string }[]> {

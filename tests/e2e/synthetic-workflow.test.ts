@@ -65,7 +65,7 @@ describe("fluxo e2e sintético do CLI", () => {
       lines
     );
     expect(importResult).toContain("Total: 4");
-    expect(importResult).toContain("Adaptador: ytd-synthetic-v1");
+    expect(importResult).toContain("Adaptador: x-archive-ytd-v1");
     expect(await readFile(archiveZip)).toEqual(archiveBeforeImport);
 
     const status = await run(root, ["status", "--data-dir", dataDirectory], lines);

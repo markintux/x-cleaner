@@ -21,6 +21,7 @@ function entry(filename: string, options: Partial<ZipEntryMetadata> = {}): ZipEn
 describe("política de entradas ZIP", () => {
   it("normaliza nomes relativos e rejeita escapes após a normalização", () => {
     expect(normalizeZipEntryName("folder\\../data/tweets.js")).toBe("data/tweets.js");
+    expect(normalizeZipEntryName("archive//data//")).toBe("archive/data/");
     for (const name of [
       "../outside.js",
       "folder/../../outside.js",

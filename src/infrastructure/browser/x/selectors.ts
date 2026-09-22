@@ -7,11 +7,16 @@
  */
 export const X_URLS = {
   origin: "https://x.com",
+  home: "https://x.com/home",
   login: "https://x.com/i/flow/login"
 } as const;
 
 export function isXLoginUrl(value: string): boolean {
-  return /\/(?:i\/flow\/login|login)(?:\/|$)/u.test(value);
+  const url = new URL(value, X_URLS.origin);
+  return (
+    /\/(?:i\/flow\/login|login)(?:\/|$)/u.test(url.pathname) ||
+    (url.pathname === "/i/jf/onboarding/web" && url.searchParams.get("mode") === "login")
+  );
 }
 
 export function isXChallengeUrl(value: string): boolean {
@@ -27,7 +32,9 @@ export const X_TEXT_KEYS = {
     "captcha",
     "desafio de segurança",
     "verificação de segurança",
-    "atividade suspeita"
+    "atividade suspeita",
+    "sorry, you are not authorized to login at this time",
+    "desculpe, você não tem permissão para fazer login no momento"
   ],
   notFound: [
     "post not found",
@@ -103,7 +110,8 @@ export const X_SELECTORS = {
       '[data-authenticated="false"]',
       'meta[name="x-authenticated"][content="false"]',
       'a[href="/login"]',
-      'button[aria-label="Log in"]'
+      'button[aria-label="Log in"]',
+      'input[name="username_or_email"]'
     ],
     sessionExpired: [
       '[data-session-expired="true"]',
@@ -152,6 +160,7 @@ export const X_SELECTORS = {
       '[data-action="open-status-menu"]',
       '[data-testid="post-menu"]',
       '[data-testid="tweet-menu"]',
+      '[data-testid="caret"]',
       'button[aria-label="More"]',
       'button[aria-label="Mais"]',
       '[role="button"][aria-label="More"]',
@@ -167,11 +176,13 @@ export const X_SELECTORS = {
     ],
     dialog: [
       '[role="dialog"]',
+      '[data-testid="confirmationSheetDialog"]',
       '[data-testid="confirmation-dialog"]',
       '[data-confirmation="delete"]'
     ],
     confirmDelete: [
       '[data-action="confirm-delete"]',
+      '[data-testid="confirmationSheetConfirm"]',
       '[data-testid="confirm-delete"]',
       '[data-testid="delete-confirm"]',
       'button[aria-label="Delete"]',

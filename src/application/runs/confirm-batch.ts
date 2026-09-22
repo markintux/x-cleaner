@@ -8,6 +8,7 @@ import { recordAudit, type AuditLogger } from "../ports/audit-logger.js";
 import type { RunRepository } from "../ports/run-repository.js";
 import type { DetectedAccount } from "../../domain/account.js";
 import { normalizeAccountHandle } from "../../domain/account.js";
+import type { InteractionType, XInteractionId } from "../../domain/interaction.js";
 import type { CleaningRun, RunBatch } from "../../domain/run.js";
 import { safetyError } from "./safety-error.js";
 
@@ -34,6 +35,7 @@ export interface ConfirmBatchMessages {
   readonly types: (summary: BatchConfirmationSummary) => string;
   readonly total: (summary: BatchConfirmationSummary) => string;
   readonly account: (summary: BatchConfirmationSummary) => string;
+  readonly items: (summary: BatchConfirmationSummary) => string;
   readonly warning: string;
   readonly instruction: string;
   readonly question: string;
@@ -43,6 +45,13 @@ export interface BatchConfirmationSummary {
   readonly countsByType: Readonly<Record<"POST" | "REPLY" | "REPOST" | "LIKE", number>>;
   readonly totalCount: number;
   readonly handle: string;
+  readonly items: readonly BatchConfirmationItem[];
+}
+
+export interface BatchConfirmationItem {
+  readonly type: InteractionType;
+  readonly xInteractionId: XInteractionId;
+  readonly interactionCreatedAt: string | null;
 }
 
 export interface ConfirmedBatchResult {
@@ -127,13 +136,15 @@ export class ConfirmBatch {
     }
 
     const requestedLimit = validateLimit(input.requestedLimit);
-    const summary = this.summarize(
-      snapshot.items.map((item) => item.interactionId),
-      handle
-    );
+    const interactionIds = eligibleInteractionIds(this.runs, run.id, this.#now(), requestedLimit);
+    if (interactionIds.length === 0) {
+      throw safetyError("NO_ELIGIBLE_ITEMS");
+    }
+    const summary = this.summarize(interactionIds, handle);
     this.prompt.writeLine(this.#messages.types(summary));
     this.prompt.writeLine(this.#messages.total(summary));
     this.prompt.writeLine(this.#messages.account(summary));
+    this.prompt.writeLine(this.#messages.items(summary));
     this.prompt.writeLine(this.#messages.warning);
     this.prompt.writeLine(this.#messages.instruction);
     const answer = await this.prompt.ask(this.#messages.question);
@@ -174,14 +185,20 @@ export class ConfirmBatch {
       "POST" | "REPLY" | "REPOST" | "LIKE",
       number
     >;
+    const items: BatchConfirmationItem[] = [];
     for (const interactionId of interactionIds) {
       const interaction = this.catalog.getInteraction(interactionId);
       if (interaction === null) {
         throw safetyError("PLAN_SNAPSHOT_INVALID");
       }
       countsByType[interaction.type] += 1;
+      items.push({
+        type: interaction.type,
+        xInteractionId: interaction.xInteractionId,
+        interactionCreatedAt: interaction.interactionCreatedAt
+      });
     }
-    return { countsByType, totalCount: interactionIds.length, handle };
+    return { countsByType, totalCount: interactionIds.length, handle, items };
   }
 }
 
@@ -219,7 +236,36 @@ const defaultMessages: ConfirmBatchMessages = {
     `Tipos selecionados: POST=${summary.countsByType.POST}, REPLY=${summary.countsByType.REPLY}, REPOST=${summary.countsByType.REPOST}, LIKE=${summary.countsByType.LIKE}`,
   total: (summary) => `Total: ${summary.totalCount}`,
   account: (summary) => `Conta vinculada: @${summary.handle}`,
+  items: (summary) =>
+    `Itens deste lote:\n${summary.items
+      .map(
+        (item) =>
+          `- ${item.type} | ID ${item.xInteractionId} | data ${item.interactionCreatedAt ?? "SEM_DATA"}`
+      )
+      .join("\n")}`,
   warning: "AVISO: esta ação é irreversível e altera sua conta no X.",
   instruction: `Digite exatamente ${DESTRUCTIVE_CONFIRMATION_PHRASE} para continuar.`,
   question: "Confirmação:"
 };
+
+function eligibleInteractionIds(
+  runs: RunRepository,
+  runId: string,
+  now: string,
+  requestedLimit: number | null
+): readonly number[] {
+  const wanted = requestedLimit ?? Number.MAX_SAFE_INTEGER;
+  const selected: number[] = [];
+  let afterSequence = 0;
+  let hasMore = true;
+
+  while (hasMore && selected.length < wanted) {
+    const pageSize = Math.min(100, wanted - selected.length);
+    const page = runs.pageEligibleItems(runId, now, pageSize, afterSequence);
+    selected.push(...page.items.map((item) => item.interactionId));
+    afterSequence = page.items.at(-1)?.sequence ?? afterSequence;
+    hasMore = page.hasMore;
+  }
+
+  return selected;
+}

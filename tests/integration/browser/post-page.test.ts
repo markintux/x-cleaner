@@ -64,6 +64,56 @@ describe("PostPage em páginas locais semânticas", () => {
     });
   });
 
+  it("aguarda o DOM atual e escolhe somente o artigo ligado ao status exato", async () => {
+    await page.setContent(`
+      <article data-testid="tweet">
+        <a href="/other/status/999">Outro post</a>
+        <button data-testid="post-menu" type="button" onclick="window.otherClicks++">Mais</button>
+      </article>
+      <div id="mount"></div>
+      <div id="global-menu" role="menu" hidden>
+        <button role="menuitem" type="button">Delete</button>
+      </div>
+      <div id="global-dialog" data-testid="confirmationSheetDialog" hidden>
+        <button data-testid="confirmationSheetConfirm" type="button">Delete</button>
+      </div>
+      <script>
+        window.otherClicks = 0;
+        setTimeout(() => {
+          document.querySelector("#mount").innerHTML =
+            '<article data-testid="tweet">' +
+            '<a href="/owner">@owner</a>' +
+            '<a href="/owner/status/123">Data</a>' +
+            '<button data-testid="caret" type="button">Mais</button>' +
+            '</article>';
+          const target = document.querySelector('#mount article');
+          const menu = document.querySelector('#global-menu');
+          const dialog = document.querySelector('#global-dialog');
+          target.querySelector('[data-testid="caret"]').onclick = () => menu.hidden = false;
+          menu.querySelector('[role="menuitem"]').onclick = () => dialog.hidden = false;
+          dialog.querySelector('[data-testid="confirmationSheetConfirm"]').onclick = () => {
+            target.remove();
+            document.body.insertAdjacentHTML('beforeend', '<div data-post-state="deleted">Post deleted</div>');
+          };
+        }, 25);
+      </script>
+    `);
+
+    const result = await new PostPage(page, {
+      expectedHandle: "owner",
+      expectedInteractionId: "123",
+      evidenceTimeoutMs: 1_000,
+      pollIntervalMs: 5
+    }).deletePost();
+
+    expect(result).toEqual({
+      kind: "DELETED",
+      outcome: "DELETED",
+      reason: "DELETED_CONFIRMED"
+    });
+    expect(await page.evaluate(() => window.otherClicks)).toBe(0);
+  });
+
   it.each([
     [
       "já removido",
@@ -105,7 +155,8 @@ describe("PostPage em páginas locais semânticas", () => {
     `);
     const result = await new PostPage(page, {
       expectedHandle: "owner",
-      expectedInteractionId: "123"
+      expectedInteractionId: "123",
+      evidenceTimeoutMs: 0
     }).deletePost();
 
     expect(result).toEqual({
@@ -127,7 +178,8 @@ describe("PostPage em páginas locais semânticas", () => {
     `);
     const result = await new PostPage(page, {
       expectedHandle: "owner",
-      expectedInteractionId: "123"
+      expectedInteractionId: "123",
+      evidenceTimeoutMs: 0
     }).deletePost();
 
     expect(result).toEqual({
@@ -150,7 +202,8 @@ describe("PostPage em páginas locais semânticas", () => {
     `);
     const result = await new PostPage(page, {
       expectedHandle: "owner",
-      expectedInteractionId: "123"
+      expectedInteractionId: "123",
+      evidenceTimeoutMs: 0
     }).deletePost();
 
     expect(result).toEqual({

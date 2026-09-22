@@ -33,7 +33,7 @@ describe("importação de diretório X Archive", () => {
       const first = await importer.execute(sourceDirectory);
       const second = await importer.execute(sourceDirectory);
 
-      expect(first.adapterKey).toBe("ytd-synthetic-v1");
+      expect(first.adapterKey).toBe("x-archive-ytd-v1");
       expect(first.postsCount).toBe(1);
       expect(first.repliesCount).toBe(1);
       expect(first.repostsCount).toBe(1);

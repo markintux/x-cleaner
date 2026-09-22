@@ -36,7 +36,7 @@ describe("import, status e dry-run", () => {
     const zipOutput = await runCli(["import", zipPath, "--data-dir", dataDirectory]);
     const statusOutput = await runCli(["status", "--data-dir", dataDirectory]);
 
-    expect(directoryOutput.join("\n")).toContain("Adaptador: ytd-synthetic-v1");
+    expect(directoryOutput.join("\n")).toContain("Adaptador: x-archive-ytd-v1");
     expect(directoryOutput.join("\n")).toContain("Inseridos: 4");
     expect(directoryOutput.join("\n")).toContain("POST: 1");
     expect(directoryOutput.join("\n")).toContain("Total: 4");

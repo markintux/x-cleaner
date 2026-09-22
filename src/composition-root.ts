@@ -22,6 +22,10 @@ import { YtdArchiveAdapter } from "./infrastructure/archive/adapters/ytd-archive
 import { ZipArchiveSource } from "./infrastructure/archive/zip-archive-source.js";
 import { BrowserContextFactory } from "./infrastructure/browser/browser-context-factory.js";
 import { XLoginGateway } from "./infrastructure/browser/x-login-gateway.js";
+import {
+  ManualChromeLauncher,
+  type ManualBrowserLauncherPort
+} from "./infrastructure/browser/manual-chrome-launcher.js";
 import { FileSystemSessionStorage } from "./infrastructure/browser/file-system-session-storage.js";
 import {
   BrowserCleanerEngine,
@@ -68,10 +72,12 @@ export interface CompositionRootOptions {
   readonly translator?: Translator;
   readonly clock?: Clock;
   readonly delay?: Delay;
+  readonly interactionDelayMilliseconds?: number;
   readonly prompt?: Prompt;
   readonly sessionPrompt?: SessionPrompt;
   readonly diagnostics?: boolean;
   readonly createBrowserContextFactory?: (dataDirectory: string) => BrowserContextFactoryPort;
+  readonly manualBrowserLauncher?: ManualBrowserLauncherPort;
   readonly createBrowserEngine?: (options: BrowserCleanerEngineOptions) => CleanerEngine;
   readonly createSignalAdapter?: (runId: string, output: CliOutput) => CliSignalAdapter;
   readonly createLoginSession?: (
@@ -126,6 +132,15 @@ export function createCompositionRoot(options: CompositionRootOptions = {}): Com
   const createLoginSession = async (dataDirectory: string) =>
     options.createLoginSession?.(dataDirectory) ??
     new LoginSession(
+      new XLoginGateway({
+        contextFactory: createBrowserContextFactory(dataDirectory),
+        manualBrowserLauncher: options.manualBrowserLauncher ?? new ManualChromeLauncher()
+      })
+    );
+
+  const createSessionInspector = async (dataDirectory: string) =>
+    options.createLoginSession?.(dataDirectory) ??
+    new LoginSession(
       new XLoginGateway({ contextFactory: createBrowserContextFactory(dataDirectory) })
     );
 
@@ -162,6 +177,7 @@ export function createCompositionRoot(options: CompositionRootOptions = {}): Com
       prompt,
       clock,
       delay,
+      delayMilliseconds: options.interactionDelayMilliseconds ?? 5_000,
       signalFactory: (runId) =>
         options.createSignalAdapter?.(runId, output) ??
         new ProcessSignalAdapter({
@@ -170,7 +186,7 @@ export function createCompositionRoot(options: CompositionRootOptions = {}): Com
           writeLine: (message) => output.writeLine(message)
         }),
       getCurrentAccount: async (dataDirectory) =>
-        (await createLoginSession(dataDirectory)).execute().then((result) => result.account),
+        (await createSessionInspector(dataDirectory)).execute().then((result) => result.account),
       createBrowserEngine
     }
   };

@@ -141,7 +141,12 @@ export class ExecuteBatch {
 
       let resolveCurrentBoundary: () => void = () => undefined;
       let currentBoundary = Promise.resolve();
-      this.#signal?.setCheckpointFlusher?.(() => currentBoundary);
+      this.#signal?.setCheckpointFlusher?.(async () => {
+        // A resume instruction is only safe after the interrupted boundary is
+        // durable. The process may exit before the scheduler wakes from pacing.
+        await currentBoundary;
+        this.commitInterrupted(run, batch, startedAt, audit, unitOfWork);
+      });
 
       let processedCount = 0;
       let engineCalls = 0;
@@ -371,6 +376,8 @@ export class ExecuteBatch {
     audit: AuditRepository,
     unitOfWork: ExecutionUnitOfWork
   ): void {
+    // The signal flusher and scheduler may both reach this boundary.
+    if (this.dependencies.runs.getBatch(batch.id)?.status !== "RUNNING") return;
     const finishedAt = this.#now();
     unitOfWork.commitBatchBoundary({
       batch: { id: batch.id, status: "INTERRUPTED", finishedAt },

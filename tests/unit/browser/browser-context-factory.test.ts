@@ -39,6 +39,7 @@ describe("BrowserContextFactory", () => {
     expect(factory.profileDirectory).not.toBe(dataDirectory);
     expect(launchPersistentContext).toHaveBeenCalledWith(factory.profileDirectory, {
       headless: false,
+      handleSIGINT: false,
       ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"]
     });
     const options = launchPersistentContext.mock.calls[0]?.[1] as Record<string, unknown>;
@@ -77,11 +78,13 @@ describe("BrowserContextFactory", () => {
     await expect(factory.launch()).resolves.toBe(context);
     expect(launchPersistentContext).toHaveBeenNthCalledWith(1, factory.profileDirectory, {
       headless: false,
+      handleSIGINT: false,
       ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"]
     });
     expect(launchPersistentContext).toHaveBeenNthCalledWith(2, factory.profileDirectory, {
       headless: false,
       channel: "chrome",
+      handleSIGINT: false,
       ignoreDefaultArgs: ["--use-mock-keychain", "--password-store=basic"]
     });
   });

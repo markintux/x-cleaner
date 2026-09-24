@@ -31,6 +31,12 @@ export interface ReactionPageOptions extends Partial<ReactionPageInput> {
   readonly expectedAuthor?: string;
   readonly authorHandle?: string;
   readonly statusId?: string;
+  readonly evidenceTimeoutMs?: number;
+  readonly pollIntervalMs?: number;
+  readonly sleep?: (milliseconds: number) => Promise<void>;
+  readonly requireOwnerRepostEvidence?: boolean;
+  readonly confirmRepostMenu?: boolean;
+  readonly expectedOrigin?: string;
 }
 
 export interface ReactionPageActionConfig {
@@ -41,6 +47,7 @@ export interface ReactionPageActionConfig {
   readonly removedStateSelectors: readonly string[];
   readonly missingActionCode: string;
   readonly notConfirmedCode: string;
+  readonly requireUrlHandle?: boolean;
 }
 
 /**
@@ -48,11 +55,21 @@ export interface ReactionPageActionConfig {
  * about semantic selector candidates supplied by the operation page object.
  */
 export class ReactionPageSupport {
+  private readonly evidenceTimeoutMs: number;
+  private readonly pollIntervalMs: number;
+  private readonly sleep: (milliseconds: number) => Promise<void>;
+
   constructor(
     private readonly page: BrowserPagePort,
     private readonly options: ReactionPageOptions,
     private readonly config: ReactionPageActionConfig
-  ) {}
+  ) {
+    this.evidenceTimeoutMs = options.evidenceTimeoutMs ?? 0;
+    this.pollIntervalMs = options.pollIntervalMs ?? 250;
+    this.sleep =
+      options.sleep ??
+      ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  }
 
   async execute(input?: ReactionPageInput): Promise<ReactionPageEvidence> {
     const expected = this.resolveExpected(input);
@@ -60,12 +77,9 @@ export class ReactionPageSupport {
       return unknown("INVALID_EXPECTED_IDENTITY");
     }
 
-    const initialState = await this.readNonInteractiveState();
-    if (initialState !== null) {
-      return initialState;
-    }
-
-    const target = await this.findTarget();
+    const initial = await this.waitForTarget(expected.expectedInteractionId);
+    if (initial.state !== null) return initial.state;
+    const target = initial.target;
     if (target === null) {
       return unknown("TARGET_EVIDENCE_MISSING");
     }
@@ -74,6 +88,13 @@ export class ReactionPageSupport {
     if (identity !== null) {
       return identity;
     }
+    if (this.options.requireOwnerRepostEvidence) {
+      const targetText =
+        (await (target.innerText?.() ?? target.textContent()))?.toLowerCase() ?? "";
+      if (!containsAny(targetText, X_TEXT_KEYS.repostedByYou)) {
+        return unknown("REPOST_OWNER_EVIDENCE_MISSING");
+      }
+    }
 
     const action = await this.findAction(target);
     if (action === null) {
@@ -81,7 +102,15 @@ export class ReactionPageSupport {
     }
 
     await action.click();
-    return (await this.readAfterAction(target)) ?? unknown(this.config.notConfirmedCode);
+    const afterAction = await this.readAfterAction(target);
+    if (afterAction !== null) return afterAction;
+    if (this.options.confirmRepostMenu) {
+      const confirmation = await this.findUndoRepostConfirmation();
+      if (confirmation === null) return unknown("UNDO_REPOST_CONFIRMATION_MISSING");
+      await confirmation.click();
+      return (await this.waitForRemoved(target)) ?? unknown(this.config.notConfirmedCode);
+    }
+    return unknown(this.config.notConfirmedCode);
   }
 
   private resolveExpected(input?: ReactionPageInput): ReactionPageInput | null {
@@ -167,10 +196,36 @@ export class ReactionPageSupport {
     return null;
   }
 
+  private async waitForRemoved(target: BrowserLocatorPort): Promise<ReactionPageEvidence | null> {
+    const startedAt = Date.now();
+    while (true) {
+      const result = await this.readAfterAction(target);
+      if (result !== null) return result;
+      const remaining = 5_000 - (Date.now() - startedAt);
+      if (remaining <= 0) return null;
+      await this.sleep(Math.min(this.pollIntervalMs, remaining));
+    }
+  }
+
   private async proveIdentity(
     target: BrowserLocatorPort,
     expected: ReactionPageInput
   ): Promise<ReactionPageEvidence | null> {
+    if (this.options.expectedOrigin !== undefined) {
+      const urlIdentity = readStatusUrlIdentity(this.page.url());
+      if (new URL(this.page.url()).origin !== this.options.expectedOrigin || urlIdentity === null) {
+        return unknown("STATUS_ID_EVIDENCE_MISSING");
+      }
+      if (urlIdentity.interactionId !== expected.expectedInteractionId) {
+        return unknown("STATUS_IDENTITY_MISMATCH");
+      }
+      if (
+        this.config.requireUrlHandle !== false &&
+        urlIdentity.handle !== expected.expectedHandle
+      ) {
+        return unknown("AUTHOR_IDENTITY_MISMATCH");
+      }
+    }
     const observedIds = await this.readTargetValues(target, this.config.idAttributes);
     if (observedIds.length === 0) {
       const urlIdentity = readStatusUrlIdentity(this.page.url());
@@ -180,7 +235,10 @@ export class ReactionPageSupport {
       if (urlIdentity.interactionId !== expected.expectedInteractionId) {
         return unknown("STATUS_IDENTITY_MISMATCH");
       }
-      if (urlIdentity.handle !== expected.expectedHandle) {
+      if (
+        this.config.requireUrlHandle !== false &&
+        urlIdentity.handle !== expected.expectedHandle
+      ) {
         return unknown("AUTHOR_IDENTITY_MISMATCH");
       }
       return null;
@@ -219,7 +277,23 @@ export class ReactionPageSupport {
     return values;
   }
 
-  private async findTarget(): Promise<BrowserLocatorPort | null> {
+  private async waitForTarget(interactionId: string): Promise<{
+    target: BrowserLocatorPort | null;
+    state: ReactionPageEvidence | null;
+  }> {
+    const startedAt = Date.now();
+    while (true) {
+      const state = await this.readNonInteractiveState();
+      if (state !== null) return { target: null, state };
+      const target = await this.findTarget(interactionId);
+      if (target !== null) return { target, state: null };
+      const remaining = this.evidenceTimeoutMs - (Date.now() - startedAt);
+      if (remaining <= 0) return { target: null, state: null };
+      await this.sleep(Math.min(this.pollIntervalMs, remaining));
+    }
+  }
+
+  private async findTarget(interactionId: string): Promise<BrowserLocatorPort | null> {
     for (const selector of this.config.targetSelectors) {
       const locator = this.page.locator(selector);
       const count = await locator.count();
@@ -230,6 +304,24 @@ export class ReactionPageSupport {
         }
       }
     }
+    const articles = this.page.locator("article");
+    let exact: BrowserLocatorPort | null = null;
+    for (let index = 0; index < (await articles.count()); index += 1) {
+      const article = articles.nth?.(index) ?? (index === 0 ? articles.first() : null);
+      if (article === null) continue;
+      const links = this.scopedLocator(article, 'a[href*="/status/"]');
+      if (links === null) continue;
+      for (let linkIndex = 0; linkIndex < (await links.count()); linkIndex += 1) {
+        const link = links.nth?.(linkIndex) ?? (linkIndex === 0 ? links.first() : null);
+        if (link === null) continue;
+        const href = await link.getAttribute("href");
+        if (href === null || !hasExactStatusId(href, interactionId)) continue;
+        if (exact !== null) return null;
+        exact = article;
+        break;
+      }
+    }
+    if (exact !== null && (await this.isUsable(exact))) return exact;
     return null;
   }
 
@@ -239,6 +331,28 @@ export class ReactionPageSupport {
       return stable;
     }
     return this.findByAccessibleText(target, "button", this.config.actionNames);
+  }
+
+  private async findUndoRepostConfirmation(): Promise<BrowserLocatorPort | null> {
+    const startedAt = Date.now();
+    while (true) {
+      const menus = this.page.locator('[role="menuitem"]');
+      let match: BrowserLocatorPort | null = null;
+      for (let index = 0; index < (await menus.count()); index += 1) {
+        const menu = menus.nth?.(index) ?? (index === 0 ? menus.first() : null);
+        if (menu === null) continue;
+        const label = ((await (menu.innerText?.() ?? menu.textContent())) ?? "")
+          .trim()
+          .toLowerCase();
+        if (!X_TEXT_KEYS.undoRepost.some((candidate) => candidate === label)) continue;
+        if (match !== null) return null;
+        match = menu;
+      }
+      if (match !== null && (await this.isUsable(match))) return match;
+      const remaining = 3_000 - (Date.now() - startedAt);
+      if (remaining <= 0) return null;
+      await this.sleep(Math.min(this.pollIntervalMs, remaining));
+    }
   }
 
   private async findOne(
@@ -356,6 +470,17 @@ export class ReactionPageSupport {
   }
 }
 
+function hasExactStatusId(value: string, interactionId: string): boolean {
+  try {
+    const pathname = new URL(value, "https://x.com").pathname;
+    return (
+      pathname.split("/").filter(Boolean).at(-1) === interactionId && pathname.includes("/status/")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function reactionConfig(
   actionSelectors: readonly string[],
   actionNames: readonly string[],
@@ -363,7 +488,8 @@ export function reactionConfig(
   missingActionCode: string,
   notConfirmedCode: string,
   targetSelectors: readonly string[],
-  idAttributes: readonly string[]
+  idAttributes: readonly string[],
+  requireUrlHandle = true
 ): ReactionPageActionConfig {
   return {
     actionSelectors,
@@ -372,7 +498,8 @@ export function reactionConfig(
     missingActionCode,
     notConfirmedCode,
     targetSelectors,
-    idAttributes
+    idAttributes,
+    requireUrlHandle
   };
 }
 

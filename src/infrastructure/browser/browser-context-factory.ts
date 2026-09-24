@@ -52,6 +52,8 @@ export class BrowserContextFactory implements DedicatedBrowserContextFactory {
     try {
       return await this.#browser.launchPersistentContext(this.profileDirectory, {
         headless: false,
+        // ProcessSignals owns Ctrl+C so the run can persist its checkpoint.
+        handleSIGINT: false,
         ignoreDefaultArgs: NATIVE_CREDENTIAL_STORE_ARGS
       });
     } catch (error) {
@@ -59,6 +61,7 @@ export class BrowserContextFactory implements DedicatedBrowserContextFactory {
       return this.#browser.launchPersistentContext(this.profileDirectory, {
         headless: false,
         channel: "chrome",
+        handleSIGINT: false,
         ignoreDefaultArgs: NATIVE_CREDENTIAL_STORE_ARGS
       });
     }

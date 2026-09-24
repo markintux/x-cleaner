@@ -68,6 +68,7 @@ export const X_TEXT_KEYS = {
     "curtida removida"
   ],
   undoRepost: ["undo repost", "desfazer repost", "desfazer republicação"],
+  repostedByYou: ["you reposted", "você repostou", "voce repostou", "repostado por você"],
   unlike: ["unlike", "descurtir", "remover curtida"],
   deleteAction: ["delete", "excluir", "apagar"],
   confirmDelete: ["delete", "excluir", "apagar"]

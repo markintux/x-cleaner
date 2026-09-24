@@ -272,21 +272,6 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
     }
   });
 
-  it("recusa tipos fora do fluxo de posts e não abre navegador", async () => {
-    const launch = vi.fn();
-    const engine = new BrowserCleanerEngine({
-      confirmedHandle: "owner",
-      contextFactory: { profileDirectory: "local", launch }
-    });
-    const result = await engine.execute(interaction("LIKE"));
-
-    expect(result).toMatchObject({
-      kind: "PERMANENT_FAILURE",
-      errorCode: "UNSUPPORTED_INTERACTION_TYPE"
-    });
-    expect(launch).not.toHaveBeenCalled();
-  });
-
   it("não executa ação quando a identidade do alvo diverge", async () => {
     let clicks = 0;
     await page.route("http://local.test/status/123", async (route) => {

@@ -53,6 +53,46 @@ describe("LikePage em páginas locais semânticas", () => {
     expect(await page.evaluate(() => window.unlikeClicks ?? 0)).toBe(1);
   });
 
+  it("aceita o autor original no URL quando o ID do status é exato", async () => {
+    await page.route("http://local.test/third-party/status/123", async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<article data-testid="tweet"><button data-testid="unlike" onclick="this.remove()">Unlike</button></article>`
+      });
+    });
+    try {
+      await page.goto("http://local.test/third-party/status/123");
+      const result = await new LikePage(page, {
+        expectedHandle: "owner",
+        expectedInteractionId: "123"
+      }).unlike();
+      expect(result.kind).toBe("COMPLETED");
+    } finally {
+      await page.unroute("http://local.test/third-party/status/123");
+    }
+  });
+
+  it("aguarda o status carregar antes de procurar o controle de unlike", async () => {
+    await page.route("http://local.test/third-party/status/123", async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<main></main><script>setTimeout(() => {document.querySelector('main').innerHTML = '<article data-testid="tweet" data-tweet-id="123"><button data-testid="unlike" onclick="this.remove()">Unlike</button></article>'}, 40)</script>`
+      });
+    });
+    try {
+      await page.goto("http://local.test/third-party/status/123");
+      const result = await new LikePage(page, {
+        expectedHandle: "owner",
+        expectedInteractionId: "123",
+        evidenceTimeoutMs: 1_000,
+        pollIntervalMs: 20
+      }).unlike();
+      expect(result.kind).toBe("COMPLETED");
+    } finally {
+      await page.unroute("http://local.test/third-party/status/123");
+    }
+  });
+
   it.each([
     [
       "já removida",

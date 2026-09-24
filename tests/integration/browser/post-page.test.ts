@@ -17,7 +17,7 @@ describe("PostPage em páginas locais semânticas", () => {
       executablePath: await findChromiumExecutable()
     });
     page = await browser.newPage();
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await browser?.close();

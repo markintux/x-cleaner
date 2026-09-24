@@ -18,7 +18,7 @@ describe("AccountPage em fixtures HTML locais", () => {
       executablePath: await findChromiumExecutable()
     });
     page = await browser.newPage();
-  });
+  }, 30_000);
 
   async function findChromiumExecutable(): Promise<string> {
     const candidates = [

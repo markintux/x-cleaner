@@ -20,7 +20,7 @@ describe("BrowserCleanerEngine para REPOST e LIKE", () => {
     });
     context = await browser.newContext();
     page = await context.newPage();
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await context?.close();

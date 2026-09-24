@@ -33,7 +33,7 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
     });
     context = await browser.newContext();
     page = await context.newPage();
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await context?.close();

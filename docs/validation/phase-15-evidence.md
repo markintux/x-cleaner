@@ -17,6 +17,7 @@ runbook, as autorizações ao vivo ou a aprovação do proprietário.
 | `npm run test:coverage` | `PASSOU` | 46 arquivos de teste, 209 testes; statements 78.25%, branches 68.98%, functions 79.81%, lines 79.69% |
 | `npm pack --dry-run` | `PASSOU` | 218 arquivos no pacote privado; sem publicação |
 | `npm run check:private-artifacts` | `PASSOU` | Nenhuma violação encontrada; caminho local omitido |
+| CI `f2a558a` | `PASSOU` | macOS, Linux e Windows: scanner, formatação, lint, typecheck, testes, cobertura, build e inspeção do pacote |
 
 A tentativa preliminar de executar `npm run check` e `npm run test:coverage` em
 paralelo não é usada como evidência final: houve um timeout de hook no
@@ -55,7 +56,7 @@ gate desta fase.
 - [x] Cinco relatórios locais gerados e revisados. Os quatro anteriores registram `POST` 13 concluídos/255 pendentes; `REPLY` 1/120; `REPOST` 1/154, com 1 falha histórica; `LIKE` 1/11. O relatório do novo run `REPOST` registra 1 concluído/155 pendentes, zero falhas e estado `PAUSED`. Os cinco JSON contêm somente campos previstos e valores agregados; seus hashes conferem com o ledger. As contagens dos planos históricos são snapshots independentes e não devem ser somadas.
 - [x] Nova execução local de `npm run check`: 46 arquivos, 209 testes, typecheck, lint, formatação e build passaram. A primeira tentativa teve timeout transitório na abertura do Chromium em seis suítes; uma suíte isolada e a repetição integral passaram. `npm run test:coverage`, `npm run check:private-artifacts`, `git diff --check`, `npm pack --dry-run` e `npm run inspect:package` também passaram; o pacote privado contém 218 arquivos.
 - [x] Revisão local de privacidade: `PASSOU`. Os cinco relatórios foram auditados quanto a campos e valores; não há conteúdo, credenciais, URLs ou caminhos privados. O scanner do repositório e do pacote, a inspeção de distribuição e a revisão da evidência sanitizada passaram.
-- [ ] CI multiplataforma para as alterações atuais: `PENDENTE`. A última execução remota verde cobriu macOS, Linux e Windows, mas pertence a um commit anterior; o worktree atual tem alterações ainda não entregues ao remoto.
+- [x] CI multiplataforma para código e evidência da validação: `PASSOU` no commit `f2a558a`, com os três jobs concluídos. No macOS, o primeiro fetch do checkout falhou transitoriamente; o retry obteve o commit correto e todos os gates passaram.
 - [ ] Aprovação final do proprietário: `PENDENTE`.
 
 Os testes destrutivos listados acima tiveram autorização individual e execução

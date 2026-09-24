@@ -1,5 +1,6 @@
 import type {
   EligibleRunItemPage,
+  RunOverview,
   RunItemUpdate,
   RunRepository
 } from "../../../application/ports/run-repository.js";
@@ -86,6 +87,57 @@ export class SqliteRunRepository implements RunRepository {
       .prepare("SELECT * FROM cleaning_runs WHERE plan_id = ?")
       .get(planId);
     return row === undefined ? null : mapRun(row as Row);
+  }
+
+  listRunOverviews(): readonly RunOverview[] {
+    return this.database.connection
+      .prepare(
+        `SELECT r.id, r.status, r.pause_reason, p.selected_count AS total,
+                (SELECT group_concat(interaction_type, ',')
+                 FROM cleaning_plan_types WHERE plan_id = r.plan_id) AS types,
+                (SELECT count(*) FROM cleaning_run_items i
+                 WHERE i.run_id = r.id
+                   AND i.status NOT IN ('PENDING', 'PROCESSING')) AS processed,
+                (SELECT count(*) FROM cleaning_run_items i
+                 WHERE i.run_id = r.id AND i.status = 'COMPLETED') AS completed,
+                (SELECT count(*) FROM cleaning_run_items i
+                 WHERE i.run_id = r.id AND i.status = 'PENDING') AS pending,
+                (SELECT count(*) FROM cleaning_run_items i
+                 WHERE i.run_id = r.id AND i.status = 'FAILED') AS failed,
+                (SELECT count(*) FROM cleaning_run_items i
+                 WHERE i.run_id = r.id AND i.status = 'PENDING'
+                   AND EXISTS (
+                     SELECT 1 FROM cleaning_run_items other
+                     INNER JOIN cleaning_runs other_run ON other_run.id = other.run_id
+                     WHERE other.interaction_id = i.interaction_id
+                       AND other.run_id != r.id
+                       AND other_run.account_id = r.account_id
+                       AND (
+                         other.status = 'COMPLETED'
+                         OR other_run.created_at < r.created_at
+                         OR (other_run.created_at = r.created_at AND other_run.id < r.id)
+                       )
+                   )) AS overlapping_pending
+         FROM cleaning_runs r
+         INNER JOIN cleaning_plans p ON p.id = r.plan_id
+         ORDER BY r.created_at, r.id`
+      )
+      .all()
+      .map((raw) => {
+        const row = raw as Row;
+        return {
+          runId: requiredString(row.id),
+          types: requiredString(row.types).split(","),
+          status: requiredString(row.status) as CleaningRunStatus,
+          pauseReason: nullableString(row.pause_reason) as PauseReason | null,
+          total: requiredNumber(row.total),
+          processed: requiredNumber(row.processed),
+          completed: requiredNumber(row.completed),
+          pending: requiredNumber(row.pending),
+          failed: requiredNumber(row.failed),
+          overlappingPending: requiredNumber(row.overlapping_pending)
+        };
+      });
   }
 
   getRunItem(runItemId: number): CleaningRunItem | null {

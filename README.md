@@ -60,6 +60,22 @@ node dist/cli.js --help
 Os artefatos de distribuição podem ser inspecionados localmente com
 `npm pack --dry-run`; não há comando de publicação neste projeto.
 
+### Menu interativo
+
+Depois de importar o Archive, criar uma simulação, confirmar a conta e iniciar
+uma execução, abra `x-cleaner` sem argumentos para ver os runs salvos e escolher
+um lote. Na instalação a partir do código-fonte, use `node dist/cli.js menu`.
+O menu mostra progresso por run, pede um limite de 1 a 25 itens e entrega a
+execução ao mesmo CLI. Antes de qualquer alteração no X, o CLI mostra a conta e
+os identificadores exatos do lote e exige `APAGAR` digitado pelo proprietário.
+Planos sobrepostos ficam bloqueados no menu para evitar escolher uma segunda
+execução com os mesmos itens pendentes. Depois de cada lote, o menu mostra um
+resumo compacto; pressione Enter para voltar ao painel ou `0` para sair.
+Confira os resultados no X antes de abrir o próximo lote. Voltar ao painel não
+autoriza outra exclusão: cada lote exige nova revisão e `APAGAR`.
+Os comandos individuais continuam
+disponíveis para importação, simulação, sessão, diagnóstico e relatórios.
+
 ## Fluxo seguro
 
 1. No X, solicite e baixe o Archive oficial da própria conta. Preserve o ZIP

@@ -6,6 +6,7 @@ import { createStatusCommand } from "./commands/status.js";
 import { createSessionCommand } from "./commands/session.js";
 import { createRunCommand } from "./commands/run.js";
 import { createResumeCommand } from "./commands/resume.js";
+import { createMenuCommand } from "./commands/menu.js";
 import { createReportCommand } from "./commands/report.js";
 import type { CliDependencies } from "./dependencies.js";
 import type { MessageKey } from "../i18n/catalog.js";
@@ -33,6 +34,13 @@ export function createProgram(dependencies: CliDependencies): Command {
     formatHelp: (command, helper) => formatPortugueseHelp(command, helper, dependencies)
   });
   program.configureOutput({ outputError: () => undefined });
+
+  program
+    .command("menu")
+    .description(translate("cli.menuDescription"))
+    .action(async (_options, command) => {
+      await createMenuCommand(dependencies)(command.optsWithGlobals());
+    });
 
   program
     .command("status")

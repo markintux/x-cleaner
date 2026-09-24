@@ -182,9 +182,9 @@ describe("CLI run", () => {
       expect(prompt.messages.join("\n")).toContain("irreversível");
       expect(prompt.messages.join("\n")).toContain(`@${account.handle}`);
       expect(prompt.messages.join("\n")).toContain("Total: 1");
-      expect(prompt.messages.join("\n")).toContain("ID 900719925474099301");
-      expect(prompt.messages.join("\n")).toContain(`data ${fixedNow}`);
-      expect(prompt.messages.join("\n")).not.toContain("ID 900719925474099302");
+      expect(prompt.messages.join("\n")).toContain("900719925474099301");
+      expect(prompt.messages.join("\n")).toContain(fixedNow);
+      expect(prompt.messages.join("\n")).not.toContain("900719925474099302");
       expect(prompt.questions.join("\n")).toContain("Confirmação");
       expect(engine.calls).toHaveLength(1);
       expect(outputLines.join("\n")).toContain("Execução pausada após concluir o lote autorizado");

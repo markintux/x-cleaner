@@ -137,9 +137,19 @@ decidir se deseja continuar. Esta decisão não é inferida pelo programa.
 ## 7. Exercitar interrupção e retomada
 
 - [ ] Depois de uma fronteira persistida e dentro de uma execução autorizada,
-      envie `Ctrl+C` manualmente para interromper o executor.
+      envie **um único** `Ctrl+C` para interromper o executor. A saída imprime
+      cada fronteira persistida e o intervalo entre itens; use essas linhas para
+      escolher o instante do sinal.
+- [ ] Não envie o segundo `Ctrl+C` neste teste. O segundo sinal encerra o
+      processo de propósito sem persistir nada e invalida a evidência deste
+      gate: o run fica `RUNNING`, o lote fica `RUNNING` e o `.executor.lock`
+      sobrevive.
 - [ ] Confirme que novos itens não foram agendados, o item em voo terminou ou
       ficou recuperável, e um checkpoint `MANUAL_INTERRUPT` foi persistido.
+- [ ] Se um segundo sinal ou uma queda de processo tiver deixado o lock órfão,
+      confirme o diagnóstico com `x-cleaner status` e só então repita o comando
+      com `--release-stale-lock`. Registre que a evidência do gate veio da
+      reconciliação na retomada, e não do instante do sinal.
 - [ ] Revise o progresso, os itens terminais e o próximo item antes de usar
       `resume`.
 - [ ] Faça uma nova confirmação para o resume/batch; a confirmação anterior

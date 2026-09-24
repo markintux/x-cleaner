@@ -33,18 +33,20 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
     });
     context = await browser.newContext();
     page = await context.newPage();
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await context?.close();
     await browser?.close();
   }, 30_000);
 
-  it.each(["POST", "REPLY"] as const)("delega a exclusão para %s", async (type) => {
-    await page.route("http://local.test/status/123", async (route) => {
-      await route.fulfill({
-        contentType: "text/html",
-        body: `
+  it.each(["POST", "REPLY"] as const)(
+    "delega a exclusão para %s",
+    async (type) => {
+      await page.route("http://local.test/status/123", async (route) => {
+        await route.fulfill({
+          contentType: "text/html",
+          body: `
           <article data-testid="tweet" data-tweet-id="123" data-author-handle="owner">
             <button data-testid="post-menu" type="button">Mais</button>
             <div role="menu" hidden><button role="menuitem" data-testid="delete-post" type="button">Delete</button></div>
@@ -61,32 +63,34 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
             };
           </script>
         `
+        });
       });
-    });
 
-    const launch = vi.fn(
-      async () =>
-        ({
-          newPage: async () => page,
-          close: async () => undefined
-        }) satisfies { newPage(): Promise<Page>; close(): Promise<void> }
-    );
-    const input = interaction(type);
-    const engine = new BrowserCleanerEngine({
-      confirmedHandle: "owner",
-      contextFactory: { profileDirectory: "local", launch },
-      statusUrlBuilder: () => "http://local.test/status/123"
-    });
+      const launch = vi.fn(
+        async () =>
+          ({
+            newPage: async () => page,
+            close: async () => undefined
+          }) satisfies { newPage(): Promise<Page>; close(): Promise<void> }
+      );
+      const input = interaction(type);
+      const engine = new BrowserCleanerEngine({
+        confirmedHandle: "owner",
+        contextFactory: { profileDirectory: "local", launch },
+        statusUrlBuilder: () => "http://local.test/status/123"
+      });
 
-    await expect(engine.execute(input)).resolves.toEqual({
-      kind: "COMPLETED",
-      outcome: "COMPLETED",
-      durationMs: expect.any(Number)
-    });
-    expect(launch).toHaveBeenCalledTimes(1);
-    await engine.close();
-    await page.unroute("http://local.test/status/123");
-  });
+      await expect(engine.execute(input)).resolves.toEqual({
+        kind: "COMPLETED",
+        outcome: "COMPLETED",
+        durationMs: expect.any(Number)
+      });
+      expect(launch).toHaveBeenCalledTimes(1);
+      await engine.close();
+      await page.unroute("http://local.test/status/123");
+    },
+    30_000
+  );
 
   it("mapeia estados terminais, sessão expirada, desafio e estado desconhecido", async () => {
     const fixtures = [
@@ -270,21 +274,6 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
     } finally {
       await fixture.cleanup();
     }
-  });
-
-  it("recusa tipos fora do fluxo de posts e não abre navegador", async () => {
-    const launch = vi.fn();
-    const engine = new BrowserCleanerEngine({
-      confirmedHandle: "owner",
-      contextFactory: { profileDirectory: "local", launch }
-    });
-    const result = await engine.execute(interaction("LIKE"));
-
-    expect(result).toMatchObject({
-      kind: "PERMANENT_FAILURE",
-      errorCode: "UNSUPPORTED_INTERACTION_TYPE"
-    });
-    expect(launch).not.toHaveBeenCalled();
   });
 
   it("não executa ação quando a identidade do alvo diverge", async () => {

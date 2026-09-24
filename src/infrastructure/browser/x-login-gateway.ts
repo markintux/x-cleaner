@@ -1,5 +1,6 @@
 import type { LoginGateway, LoginGatewayResult } from "../../application/ports/login-gateway.js";
 import type { BrowserContextFactoryPort, BrowserPagePort } from "./browser-session.js";
+import type { ManualBrowserLauncherPort } from "./manual-chrome-launcher.js";
 import { AccountPage } from "./x/account-page.js";
 import { X_URLS } from "./x/selectors.js";
 
@@ -13,6 +14,7 @@ export interface XLoginGatewayOptions {
   readonly pollIntervalMs?: number;
   readonly sleep?: (milliseconds: number) => Promise<void>;
   readonly accountPageFactory?: (page: BrowserPagePort) => AccountDetector;
+  readonly manualBrowserLauncher?: ManualBrowserLauncherPort;
 }
 
 /** Owns the official X login URL, page evidence and browser polling. */
@@ -23,7 +25,7 @@ export class XLoginGateway implements LoginGateway {
   readonly #accountPageFactory: (page: BrowserPagePort) => AccountDetector;
 
   constructor(private readonly options: XLoginGatewayOptions) {
-    this.#timeoutMs = options.timeoutMs ?? 120_000;
+    this.#timeoutMs = options.timeoutMs ?? 300_000;
     this.#pollIntervalMs = options.pollIntervalMs ?? 1_000;
     this.#sleep =
       options.sleep ??
@@ -38,10 +40,14 @@ export class XLoginGateway implements LoginGateway {
   }
 
   async login(): Promise<LoginGatewayResult> {
+    await this.options.manualBrowserLauncher?.open(
+      this.options.contextFactory.profileDirectory,
+      X_URLS.login
+    );
     const context = await this.options.contextFactory.launch();
     try {
       const page = await context.newPage();
-      await page.goto(X_URLS.login, { waitUntil: "domcontentloaded" });
+      await page.goto(X_URLS.home, { waitUntil: "domcontentloaded" });
       return {
         detection: await this.waitForAuthentication(page),
         profileDirectory: this.options.contextFactory.profileDirectory
@@ -54,12 +60,18 @@ export class XLoginGateway implements LoginGateway {
   private async waitForAuthentication(page: BrowserPagePort) {
     const accountPage = this.#accountPageFactory(page);
     const startedAt = Date.now();
+    let lastDetection = await accountPage.detect();
     while (true) {
-      const detection = await accountPage.detect();
-      if (detection.status !== "UNAUTHENTICATED") return detection;
-      if (Date.now() - startedAt >= this.#timeoutMs) return detection;
+      if (
+        lastDetection.status === "AUTHENTICATED" ||
+        lastDetection.status === "SECURITY_CHALLENGE"
+      ) {
+        return lastDetection;
+      }
+      if (Date.now() - startedAt >= this.#timeoutMs) return lastDetection;
       const remaining = this.#timeoutMs - (Date.now() - startedAt);
       await this.#sleep(Math.min(this.#pollIntervalMs, remaining));
+      lastDetection = await accountPage.detect();
     }
   }
 }

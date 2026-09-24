@@ -20,12 +20,95 @@ describe("BrowserCleanerEngine para REPOST e LIKE", () => {
     });
     context = await browser.newContext();
     page = await context.newPage();
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await context?.close();
     await browser?.close();
   }, 30_000);
+
+  it("permite unlike real somente no status exato do Archive", async () => {
+    const scopedContext = await browser.newContext();
+    await scopedContext.route("https://x.com/owner/status/123", async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<article data-testid="tweet" data-tweet-id="123"><button data-testid="unlike" onclick="this.remove()">Unlike</button></article>`
+      });
+    });
+    const engine = new BrowserCleanerEngine({
+      contextFactory: { profileDirectory: "synthetic", launch: async () => scopedContext },
+      confirmedHandle: "owner"
+    });
+    try {
+      expect((await engine.execute(interaction("LIKE"))).kind).toBe("COMPLETED");
+    } finally {
+      await engine.close();
+    }
+  });
+
+  it("recusa unlike quando X redireciona para outro ID", async () => {
+    const scopedContext = await browser.newContext();
+    await scopedContext.route("https://x.com/owner/status/123", async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<article data-testid="tweet" data-tweet-id="999"><button data-testid="unlike" onclick="window.clicks++">Unlike</button></article><script>window.clicks=0; history.replaceState(null, "", "/author/status/999")</script>`
+      });
+    });
+    const engine = new BrowserCleanerEngine({
+      contextFactory: { profileDirectory: "synthetic", launch: async () => scopedContext },
+      confirmedHandle: "owner"
+    });
+    try {
+      const result = await engine.execute(interaction("LIKE"));
+      expect(result).toMatchObject({ kind: "UNKNOWN_UI", errorCode: "TARGET_EVIDENCE_MISSING" });
+      expect(await scopedContext.pages()[0]!.evaluate(() => window.clicks)).toBe(0);
+    } finally {
+      await engine.close();
+    }
+  });
+
+  it("desfaz repost somente após redirecionamento, marca do proprietário e confirmação", async () => {
+    const scopedContext = await browser.newContext();
+    await scopedContext.route("https://x.com/owner/status/123", async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<article data-testid="tweet" data-tweet-id="999"><div>You reposted</div><a href="/author/status/999">status</a><button data-testid="unretweet" onclick="document.getElementById('menu').hidden=false">Repost</button><button data-testid="delete-post" onclick="window.deleteClicks++">Delete</button></article><div id="menu" hidden><button role="menuitem" onclick="document.querySelector('article').dataset.repostState='undone';this.remove()">Undo repost</button></div><script>window.deleteClicks=0;history.replaceState(null,'','/author/status/999')</script>`
+      });
+    });
+    const engine = new BrowserCleanerEngine({
+      contextFactory: { profileDirectory: "synthetic", launch: async () => scopedContext },
+      confirmedHandle: "owner"
+    });
+    try {
+      expect((await engine.execute(interaction("REPOST"))).kind).toBe("COMPLETED");
+      expect(await scopedContext.pages()[0]!.evaluate(() => window.deleteClicks)).toBe(0);
+    } finally {
+      await engine.close();
+    }
+  });
+
+  it("não toca no repost se faltar a marca do proprietário", async () => {
+    const scopedContext = await browser.newContext();
+    await scopedContext.route("https://x.com/owner/status/123", async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<article data-testid="tweet" data-tweet-id="999"><a href="/author/status/999">status</a><button data-testid="unretweet" onclick="window.clicks++">Repost</button></article><script>window.clicks=0;history.replaceState(null,'','/author/status/999')</script>`
+      });
+    });
+    const engine = new BrowserCleanerEngine({
+      contextFactory: { profileDirectory: "synthetic", launch: async () => scopedContext },
+      confirmedHandle: "owner"
+    });
+    try {
+      expect(await engine.execute(interaction("REPOST"))).toMatchObject({
+        kind: "UNKNOWN_UI",
+        errorCode: "REPOST_OWNER_EVIDENCE_MISSING"
+      });
+      expect(await scopedContext.pages()[0]!.evaluate(() => window.clicks)).toBe(0);
+    } finally {
+      await engine.close();
+    }
+  });
 
   it.each([
     [

@@ -39,6 +39,95 @@ class FakeSignalSource implements SignalSource {
 }
 
 describe("interrupção segura", () => {
+  it("persiste a interrupção antes de anunciar retomada durante a espera entre itens", async () => {
+    const fixture = await createDatabaseFixture();
+    try {
+      const { accountId, importId } = seedCatalog(fixture, "17");
+      const managed = fixture.catalog.getManagedAccount()!;
+      fixture.catalog.upsertManagedAccount({
+        ...managed,
+        confirmedHandle: managed.archiveHandle,
+        confirmedAt: fixedNow
+      });
+      const interactionIds = [
+        addInteraction(fixture, accountId, importId, 1),
+        addInteraction(fixture, accountId, importId, 2)
+      ];
+      const plan = createPlan(fixture, accountId, interactionIds);
+      const runId = "run-interrupt-during-pacing";
+      const batchId = "batch-interrupt-during-pacing";
+      fixture.runs.createRun({
+        id: runId,
+        planId: plan.id,
+        accountId,
+        boundHandle: "synthetic-17",
+        status: "PENDING",
+        pauseReason: null,
+        startedAt: null,
+        pausedAt: null,
+        finishedAt: null,
+        createdAt: fixedNow,
+        updatedAt: fixedNow
+      });
+      fixture.runs.createBatch({
+        id: batchId,
+        runId,
+        requestedLimit: 2,
+        confirmedAt: fixedNow,
+        status: "RUNNING",
+        startedAt: fixedNow,
+        finishedAt: null,
+        createdAt: fixedNow,
+        updatedAt: fixedNow
+      });
+      const messages: string[] = [];
+      const signals = new ProcessSignals({
+        runId,
+        writeLine: (message) => {
+          expect(fixture.runs.getRun(runId)?.status).toBe("INTERRUPTED");
+          expect(fixture.runs.getBatch(batchId)?.status).toBe("INTERRUPTED");
+          messages.push(message);
+        }
+      });
+      const engine = new FakeCleanerEngine();
+      const result = await new ExecuteBatch(
+        {
+          plans: fixture.plans,
+          catalog: fixture.catalog,
+          runs: fixture.runs,
+          audit: fixture.audit,
+          unitOfWork: new UnitOfWork(fixture.database, fixture.runs, fixture.audit),
+          lock: new ExecutorLock(fixture.directory),
+          engine
+        },
+        {
+          signal: signals,
+          delayMilliseconds: 5_000,
+          delay: {
+            wait: async () => {
+              await signals.handleSigint();
+            }
+          },
+          clock: { now: () => fixedNow }
+        }
+      ).execute({
+        runId,
+        batchId,
+        account: { handle: "synthetic-17", xUserId: managed.xUserId }
+      });
+
+      expect(result.run.status).toBe("INTERRUPTED");
+      expect(engine.calls).toHaveLength(1);
+      expect(fixture.audit.listCheckpoints(runId).map((checkpoint) => checkpoint.reason)).toEqual([
+        "ITEM_COMMITTED",
+        "MANUAL_INTERRUPT"
+      ]);
+      expect(messages).toEqual([`x-cleaner resume ${runId}`]);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it("converte o primeiro SIGINT em parada e imprime o comando exato", async () => {
     const source = new FakeSignalSource();
     const events: string[] = [];

@@ -27,6 +27,7 @@ import type { Translator } from "../i18n/translator.js";
 import type { DetectedAccount } from "../domain/account.js";
 import type { RunReport } from "../application/reports/generate-run-report.js";
 import type { ExecuteBatchSignal } from "../application/runs/execute-batch.js";
+import type { ExecutionProgressReporter } from "../application/ports/execution-progress.js";
 
 export interface BrowserEngineOptions {
   readonly dataDirectory: string;
@@ -75,6 +76,8 @@ export interface RunCliDependencies {
   readonly getCurrentAccount?: (dataDirectory: string) => Promise<DetectedAccount | null>;
   readonly clock?: Clock;
   readonly delay?: Delay;
+  readonly delayMilliseconds?: number;
+  readonly progress?: ExecutionProgressReporter;
   readonly lock?: ExecutorLockPort;
   readonly signalFactory?: (runId: string) => CliSignalAdapter;
   readonly createBrowserEngine?: (options: BrowserEngineOptions) => CleanerEngine;

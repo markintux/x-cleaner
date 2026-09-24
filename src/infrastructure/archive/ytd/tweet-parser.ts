@@ -65,8 +65,6 @@ function classifyTweet(tweet: Record<string, unknown>): InteractionType {
     throw new YtdParserError("MALFORMED_ARCHIVE_RECORD");
   }
 
-  // These fields are archive evidence. The text prefix "RT @" is deliberately
-  // not used because it is content, not proof that X recorded a repost.
   if (
     hasPresentValue(tweet, [
       "retweeted_status_id_str",
@@ -91,6 +89,13 @@ function classifyTweet(tweet: Record<string, unknown>): InteractionType {
     ])
   ) {
     return "REPLY";
+  }
+
+  // Current official exports can omit structural retweet fields and encode
+  // reposts only with the canonical text prefix used by X itself.
+  const text = firstString(tweet, ["full_text", "text", "content", "note_text"]);
+  if (text !== null && /^RT\s+@/u.test(text)) {
+    return "REPOST";
   }
 
   return "POST";

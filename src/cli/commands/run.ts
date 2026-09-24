@@ -1,11 +1,9 @@
-import {
-  ConfirmBatch,
-  type BatchConfirmationSummary
-} from "../../application/runs/confirm-batch.js";
+import { ConfirmBatch } from "../../application/runs/confirm-batch.js";
 import { CreateRun } from "../../application/runs/create-run.js";
 import { ExecuteBatch } from "../../application/runs/execute-batch.js";
 import { RecoverRun } from "../../application/runs/recover-run.js";
 import type { DetectedAccount } from "../../domain/account.js";
+import type { CleaningRun } from "../../domain/run.js";
 import {
   openCliRepositories,
   type CliDependencies,
@@ -14,16 +12,22 @@ import {
 } from "../dependencies.js";
 import type { CleanerEngine } from "../../application/ports/cleaner-engine.js";
 import type { ExecuteBatchResult } from "../../application/runs/execute-batch.js";
+import type { ExecutorLockPort } from "../../application/ports/executor-lock.js";
+import { CliExecutionProgress } from "../execution-progress.js";
 import { ProcessSignals } from "../../platform/process-signals.js";
 import { SystemDelay } from "../../platform/delay.js";
 import { GetRunProgress } from "../../application/progress/get-run-progress.js";
 import { ProgressRenderer } from "../progress-renderer.js";
 import { recordAudit } from "../../application/ports/audit-logger.js";
 import { ReadlinePrompt } from "../prompt.js";
+import { createBatchReviewMessages } from "../batch-review.js";
 
 export interface RunCommandOptions {
   readonly dataDir?: string;
   readonly limit?: string | number;
+  readonly presentation?: "menu";
+  /** Owner-explicit recovery for a lock left behind by an unclean stop. */
+  readonly releaseStaleLock?: boolean;
 }
 
 export interface RunCommandResult {
@@ -31,6 +35,13 @@ export interface RunCommandResult {
   readonly runId: string;
   readonly batchId: string | null;
   readonly processedCount: number;
+  readonly summary?: {
+    readonly status: CleaningRun["status"];
+    readonly pauseReason: CleaningRun["pauseReason"];
+    readonly completedInBatch: number;
+    readonly remaining: number;
+    readonly failed: number;
+  };
 }
 
 export function createRunCommand(
@@ -55,6 +66,11 @@ async function executeCommand(
   const repositories = await openCliRepositories(dependencies, dataDirectory);
   try {
     const services = requireRunRepositories(repositories);
+    const lock = dependencies.run?.lock ?? services.lock;
+    // The lock is diagnosed before recovery and before the destructive
+    // confirmation, so a live executor is never reconciled underneath and the
+    // owner never types the confirmation phrase into a command that cannot run.
+    await assertExecutorLockAvailable(lock, dependencies, options.releaseStaleLock === true);
     const auditLogger = dependencies.auditLogger ?? repositories.auditLogger;
     const limit = parseLimit(options.limit);
     const commandClock = dependencies.run?.clock ?? dependencies.clock;
@@ -75,10 +91,18 @@ async function executeCommand(
       if (services.audit === undefined || services.unitOfWork === undefined) {
         throw new Error("EXECUTION_SERVICES_NOT_CONFIGURED");
       }
-      new RecoverRun(
+      const recovery = new RecoverRun(
         { runs: services.runs, audit: services.audit, unitOfWork: services.unitOfWork },
         commandClock === undefined ? {} : { clock: commandClock }
       ).execute({ runId: run.id });
+      if (recovery.uncleanStop) {
+        dependencies.output.writeLine(
+          dependencies.translator.translate("run.recoveredUncleanStop", {
+            batches: recovery.closedBatchIds.length,
+            items: recovery.recoveredCount
+          })
+        );
+      }
       run = requireRun(services.runs.getRun(run.id));
       account = await resolveCurrentAccount(dependencies, dataDirectory);
       if (account === undefined) {
@@ -98,34 +122,21 @@ async function executeCommand(
       dependencies.run?.prompt ??
       dependencies.prompt ??
       new ReadlinePrompt({ writeLine: (message) => dependencies.output.writeLine(message) });
-    dependencies.output.writeLine(
-      dependencies.translator.translate("run.planId", { planId: run.planId })
-    );
-    dependencies.output.writeLine(
-      dependencies.translator.translate("run.runId", { runId: run.id })
-    );
+    if (options.presentation !== "menu") {
+      dependencies.output.writeLine(
+        dependencies.translator.translate("run.planId", { planId: run.planId })
+      );
+      dependencies.output.writeLine(
+        dependencies.translator.translate("run.runId", { runId: run.id })
+      );
+    }
     const configuredEngine =
       dependencies.run?.engine ?? dependencies.run?.cleanerEngine ?? engineFromLegacy(dependencies);
     const confirmationOptions = commandClock ? { clock: commandClock } : {};
     const localizedConfirmationOptions = {
       ...confirmationOptions,
       ...(auditLogger === undefined ? {} : { auditLogger }),
-      messages: {
-        types: (summary: BatchConfirmationSummary) =>
-          dependencies.translator.translate("run.typeCounts", {
-            posts: summary.countsByType.POST,
-            replies: summary.countsByType.REPLY,
-            reposts: summary.countsByType.REPOST,
-            likes: summary.countsByType.LIKE
-          }),
-        total: (summary: BatchConfirmationSummary) =>
-          dependencies.translator.translate("run.total", { count: summary.totalCount }),
-        account: (summary: BatchConfirmationSummary) =>
-          dependencies.translator.translate("run.account", { handle: summary.handle }),
-        warning: dependencies.translator.translate("run.warning"),
-        instruction: dependencies.translator.translate("run.confirmInstruction"),
-        question: dependencies.translator.translate("run.confirmQuestion")
-      }
+      messages: createBatchReviewMessages(dependencies.translator)
     };
     const confirmation = await new ConfirmBatch(
       services.plans,
@@ -135,11 +146,12 @@ async function executeCommand(
       localizedConfirmationOptions
     ).execute({ run, account, requestedLimit: limit });
     if (!confirmation.confirmed || confirmation.batch === null) {
-      dependencies.output.writeLine(dependencies.translator.translate("run.canceled"));
+      if (options.presentation !== "menu") {
+        dependencies.output.writeLine(dependencies.translator.translate("run.canceled"));
+      }
       return { canceled: true, runId: run.id, batchId: null, processedCount: 0 };
     }
 
-    const lock = dependencies.run?.lock ?? services.lock;
     if (lock === undefined || services.unitOfWork === undefined || services.audit === undefined) {
       throw new Error("EXECUTION_SERVICES_NOT_CONFIGURED");
     }
@@ -152,9 +164,21 @@ async function executeCommand(
     if (engine === undefined) {
       throw new Error("ENGINE_NOT_CONFIGURED");
     }
+    const completedBefore =
+      options.presentation === "menu"
+        ? new GetRunProgress(services.runs).execute(run.id).counts.completed
+        : 0;
     const executionOptions = {
       ...(commandClock === undefined ? {} : { clock: commandClock }),
-      delay: dependencies.run?.delay ?? dependencies.delay ?? new SystemDelay()
+      delay: dependencies.run?.delay ?? dependencies.delay ?? new SystemDelay(),
+      delayMilliseconds: dependencies.run?.delayMilliseconds ?? 0,
+      progress:
+        dependencies.run?.progress ??
+        new CliExecutionProgress({
+          translator: dependencies.translator,
+          writeLine: (message) => dependencies.output.writeLine(message),
+          compact: options.presentation === "menu"
+        })
     };
     const signals =
       dependencies.run?.signalFactory?.(run.id) ??
@@ -167,6 +191,9 @@ async function executeCommand(
     const uninstallSignals = signals.install();
     let result: ExecuteBatchResult;
     try {
+      if (options.presentation === "menu") {
+        dependencies.output.writeLine(dependencies.translator.translate("menu.progressPreparing"));
+      }
       result = await new ExecuteBatch(
         {
           plans: services.plans,
@@ -185,39 +212,99 @@ async function executeCommand(
       await closeEngine(engine);
     }
     const progress = new GetRunProgress(services.runs).execute(result.run.id);
-    for (const line of new ProgressRenderer({ translator: dependencies.translator }).render(
-      progress
-    )) {
-      dependencies.output.writeLine(line);
+    if (options.presentation !== "menu") {
+      for (const line of new ProgressRenderer({ translator: dependencies.translator }).render(
+        progress
+      )) {
+        dependencies.output.writeLine(line);
+      }
     }
-    if (result.run.status === "PAUSED") {
-      dependencies.output.writeLine(
-        dependencies.translator.translate("run.paused", {
-          runId: result.run.id,
-          reason: result.run.pauseReason ?? "UNKNOWN_UI"
-        })
-      );
-    } else if (result.run.status === "INTERRUPTED") {
-      dependencies.output.writeLine(
-        dependencies.translator.translate("run.interrupted", { runId: result.run.id })
-      );
-    } else {
-      dependencies.output.writeLine(
-        dependencies.translator.translate("run.completed", {
-          runId: result.run.id,
-          count: result.processedCount
-        })
-      );
+    if (options.presentation !== "menu") {
+      if (result.run.status === "PAUSED") {
+        dependencies.output.writeLine(
+          result.run.pauseReason === null
+            ? dependencies.translator.translate("run.batchCompleted", {
+                runId: result.run.id
+              })
+            : dependencies.translator.translate("run.paused", {
+                runId: result.run.id,
+                reason: result.run.pauseReason
+              })
+        );
+      } else if (result.run.status === "INTERRUPTED") {
+        dependencies.output.writeLine(
+          dependencies.translator.translate("run.interrupted", { runId: result.run.id })
+        );
+      } else {
+        dependencies.output.writeLine(
+          dependencies.translator.translate("run.completed", {
+            runId: result.run.id,
+            count: result.processedCount
+          })
+        );
+      }
     }
     return {
       canceled: false,
       runId: result.run.id,
       batchId: result.batch.id,
-      processedCount: result.processedCount
+      processedCount: result.processedCount,
+      ...(options.presentation === "menu"
+        ? {
+            summary: {
+              status: result.run.status,
+              pauseReason: result.run.pauseReason,
+              completedInBatch: Math.max(0, progress.counts.completed - completedBefore),
+              remaining: progress.counts.remaining,
+              failed: progress.counts.failed
+            }
+          }
+        : {})
     };
   } finally {
     repositories.close?.();
   }
+}
+
+/**
+ * Diagnoses the filesystem lock without ever taking it over implicitly. A
+ * stale file is only removed when the owner asks for it in the same command.
+ */
+async function assertExecutorLockAvailable(
+  lock: ExecutorLockPort | undefined,
+  dependencies: CliDependencies,
+  releaseStaleLock: boolean
+): Promise<void> {
+  if (lock?.diagnoseStaleLock === undefined) return;
+  let diagnosis = await lock.diagnoseStaleLock();
+  if (diagnosis === "STALE" && releaseStaleLock) {
+    const released = (await lock.releaseStaleLock?.()) ?? false;
+    dependencies.output.writeLine(
+      dependencies.translator.translate(released ? "run.lockReleased" : "run.lockNotStale")
+    );
+    diagnosis = await lock.diagnoseStaleLock();
+  }
+  if (diagnosis === "NOT_HELD") return;
+  if (diagnosis === "UNKNOWN") {
+    dependencies.output.writeLine(dependencies.translator.translate("run.lockUnknown"));
+    throw executorLockHeldError();
+  }
+  const owner = (await lock.readStatus?.()) ?? null;
+  dependencies.output.writeLine(
+    dependencies.translator.translate(diagnosis === "ACTIVE" ? "run.lockActive" : "run.lockStale", {
+      pid: owner?.pid ?? "?",
+      hostname: owner?.hostname ?? "?",
+      acquiredAt: owner?.acquiredAt ?? "?"
+    })
+  );
+  if (diagnosis === "STALE") {
+    dependencies.output.writeLine(dependencies.translator.translate("run.lockStaleInstruction"));
+  }
+  throw executorLockHeldError();
+}
+
+function executorLockHeldError(): Error {
+  return Object.assign(new Error("EXECUTOR_LOCK_HELD"), { code: "EXECUTOR_LOCK_HELD" });
 }
 
 async function closeEngine(engine: CleanerEngine): Promise<void> {

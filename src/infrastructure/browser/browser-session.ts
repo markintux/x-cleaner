@@ -1,5 +1,6 @@
 export interface BrowserLocatorPort {
   first(): BrowserLocatorPort;
+  nth?(index: number): BrowserLocatorPort;
   count(): Promise<number>;
   getAttribute(name: string): Promise<string | null>;
   textContent(): Promise<string | null>;

@@ -20,12 +20,31 @@ sem uma autorização separada depois dos gates de validação.
 - macOS, Linux ou Windows.
 - Chromium do Playwright instalado para comandos que abrem a sessão visível:
   `npx playwright install chromium`.
+- Se esse binário não estiver disponível, o CLI pode usar uma instalação local
+  do Google Chrome, ainda com o perfil dedicado do X Cleaner e sem reutilizar o
+  perfil cotidiano.
 - Uma conta própria no X e o X Archive oficial baixado pelo fluxo de configurações
   da própria conta. O X Cleaner nunca solicita nem armazena a senha.
 
 O fluxo de sessão abre o navegador visível e usa um perfil dedicado. Não use o
 perfil cotidiano do Chrome, não compartilhe cookies e não tente contornar
 CAPTCHA, desafios ou limites de taxa.
+
+Durante `session login`, o Google Chrome comum abre primeiro com esse perfil
+dedicado. Conclua o login e feche a janela; em seguida, o X Cleaner reutiliza o
+mesmo perfil via Playwright somente para validar a sessão e identificar a conta.
+
+Execuções reais aguardam pelo menos 5 segundos entre interações concluídas. O
+intervalo cria uma fronteira visível para interrupção manual e não autoriza o
+próximo lote automaticamente.
+
+Durante a execução, cada item é impresso quando começa e quando sua fronteira é
+persistida, e o intervalo entre itens também é anunciado. O primeiro `Ctrl+C`
+para o agendamento e fecha o lote na última fronteira já persistida; o segundo
+encerra o processo de imediato e, de propósito, não persiste nada. Depois de uma
+parada não limpa, o `.executor.lock` sobrevive: consulte `x-cleaner status` e,
+confirmando que nenhum executor está ativo, repita o comando com
+`--release-stale-lock`. Ver `docs/troubleshooting.md`.
 
 ## Instalação a partir do código-fonte
 
@@ -40,6 +59,22 @@ node dist/cli.js --help
 
 Os artefatos de distribuição podem ser inspecionados localmente com
 `npm pack --dry-run`; não há comando de publicação neste projeto.
+
+### Menu interativo
+
+Depois de importar o Archive, criar uma simulação, confirmar a conta e iniciar
+uma execução, abra `x-cleaner` sem argumentos para ver os runs salvos e escolher
+um lote. Na instalação a partir do código-fonte, use `node dist/cli.js menu`.
+O menu mostra progresso por run, pede um limite de 1 a 25 itens e entrega a
+execução ao mesmo CLI. Antes de qualquer alteração no X, o CLI mostra a conta e
+os identificadores exatos do lote e exige `APAGAR` digitado pelo proprietário.
+Planos sobrepostos ficam bloqueados no menu para evitar escolher uma segunda
+execução com os mesmos itens pendentes. Depois de cada lote, o menu mostra um
+resumo compacto; pressione Enter para voltar ao painel ou `0` para sair.
+Confira os resultados no X antes de abrir o próximo lote. Voltar ao painel não
+autoriza outra exclusão: cada lote exige nova revisão e `APAGAR`.
+Os comandos individuais continuam
+disponíveis para importação, simulação, sessão, diagnóstico e relatórios.
 
 ## Fluxo seguro
 

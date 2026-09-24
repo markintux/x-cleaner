@@ -159,10 +159,15 @@ export function normalizeZipEntryName(filename: string): string {
 export const forbiddenArchiveWarningReasons = new Set([
   "appended data",
   "prepended data",
+  "prepended central directory",
   "trailing central directory data",
   "duplicate filename",
   "mismatched zip64 end of central directory",
-  "multiple end of central directory records"
+  "multiple end of central directory records",
+  "mismatched local file header (filename)",
+  "mismatched local file header (general purpose bit flag)",
+  "mismatched local file header (compression method)",
+  "mismatched local file header (crc32 or sizes)"
 ]);
 
 export function assertNoForbiddenArchiveWarnings(

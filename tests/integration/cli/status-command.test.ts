@@ -40,6 +40,7 @@ describe("x-cleaner status", () => {
 
     expect(lines).toContain(`Diretório local de dados: ${dataDirectory}`);
     expect(lines.join("\n")).toContain("Nenhuma conexão com o X foi realizada.");
+    expect(lines).toContain("Executor: nenhum lock ativo neste diretório de dados.");
     expect(networkRequest).not.toHaveBeenCalled();
   });
 });

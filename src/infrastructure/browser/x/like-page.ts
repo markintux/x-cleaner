@@ -43,7 +43,8 @@ export class LikePage {
         "UNLIKE_CONTROL_MISSING",
         "UNLIKE_NOT_CONFIRMED",
         X_SELECTORS.like.target,
-        X_SELECTORS.like.idAttributes
+        X_SELECTORS.like.idAttributes,
+        false
       )
     );
   }

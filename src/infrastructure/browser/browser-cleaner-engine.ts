@@ -14,6 +14,7 @@ import { buildInteractionUrl } from "./x/interaction-url.js";
 import { LikePage, type LikePageEvidence } from "./x/like-page.js";
 import { PostPage, type PostPageEvidence } from "./x/post-page.js";
 import { RepostPage, type RepostPageEvidence } from "./x/repost-page.js";
+import { isXChallengeUrl, isXLoginUrl } from "./x/selectors.js";
 
 export interface BrowserCleanerEngineOptions {
   readonly dataDirectory?: string;
@@ -82,13 +83,6 @@ export class BrowserCleanerEngine implements CleanerEngine {
 
   async execute(input: CleanerEngineInteraction): Promise<CleanerEngineOutcome> {
     const startedAt = Date.now();
-    if (
-      this.#reactionNavigationIsUnbound &&
-      (input.interaction.type === "REPOST" || input.interaction.type === "LIKE")
-    ) {
-      return permanent("UNSUPPORTED_INTERACTION_TYPE", elapsed(startedAt));
-    }
-
     let handle: string;
     try {
       handle = normalizeAccountHandle(this.#confirmedHandle);
@@ -104,10 +98,58 @@ export class BrowserCleanerEngine implements CleanerEngine {
       const page = await this.page();
       const url = this.#statusUrlBuilder(handle, input.interaction.xInteractionId);
       await page.goto(url, { waitUntil: "domcontentloaded" });
-      const evidence = await this.executePageAction(page, input.interaction.type, {
+      let targetIdentity: { expectedHandle: string; expectedInteractionId: string } = {
         expectedHandle: handle,
         expectedInteractionId: input.interaction.xInteractionId
-      });
+      };
+      if (this.#reactionNavigationIsUnbound && input.interaction.type === "REPOST") {
+        const canonical = await waitForRepostCanonical(page, input.interaction.xInteractionId);
+        if (canonical === null) {
+          if (isXChallengeUrl(page.url())) {
+            return {
+              kind: "CHALLENGE_OR_RATE_LIMIT",
+              outcome: "PAUSED",
+              pauseReason: "SECURITY_CHALLENGE",
+              errorCode: "SECURITY_CHALLENGE",
+              durationMs: elapsed(startedAt)
+            };
+          }
+          if (isXLoginUrl(page.url())) {
+            return {
+              kind: "SESSION_EXPIRED",
+              outcome: "PAUSED",
+              pauseReason: "SESSION_EXPIRED",
+              errorCode: "SESSION_EXPIRED",
+              durationMs: elapsed(startedAt)
+            };
+          }
+          return {
+            kind: "UNKNOWN_UI",
+            outcome: "PAUSED",
+            pauseReason: "UNKNOWN_UI",
+            errorCode: "REPOST_CANONICAL_TARGET_MISSING",
+            durationMs: elapsed(startedAt)
+          };
+        }
+        targetIdentity = {
+          expectedHandle: canonical.handle,
+          expectedInteractionId: canonical.interactionId
+        };
+      }
+      if (
+        this.#reactionNavigationIsUnbound &&
+        input.interaction.type === "LIKE" &&
+        !isExactXStatus(page.url(), input.interaction.xInteractionId)
+      ) {
+        return {
+          kind: "UNKNOWN_UI",
+          outcome: "PAUSED",
+          pauseReason: "UNKNOWN_UI",
+          errorCode: "TARGET_EVIDENCE_MISSING",
+          durationMs: elapsed(startedAt)
+        };
+      }
+      const evidence = await this.executePageAction(page, input.interaction.type, targetIdentity);
       return mapEvidence(evidence, elapsed(startedAt));
     } catch {
       return permanent("BROWSER_ERROR", elapsed(startedAt));
@@ -150,11 +192,55 @@ export class BrowserCleanerEngine implements CleanerEngine {
       case "REPLY":
         return new PostPage(page, identity).deletePost();
       case "REPOST":
-        return new RepostPage(page, identity).undoRepost();
+        return new RepostPage(page, {
+          ...identity,
+          ...(this.#reactionNavigationIsUnbound
+            ? {
+                evidenceTimeoutMs: 15_000,
+                requireOwnerRepostEvidence: true,
+                confirmRepostMenu: true,
+                expectedOrigin: "https://x.com"
+              }
+            : {})
+        }).undoRepost();
       case "LIKE":
-        return new LikePage(page, identity).unlike();
+        return new LikePage(page, {
+          ...identity,
+          evidenceTimeoutMs: this.#reactionNavigationIsUnbound ? 15_000 : 0,
+          ...(this.#reactionNavigationIsUnbound ? { expectedOrigin: "https://x.com" } : {})
+        }).unlike();
     }
   }
+}
+
+function isExactXStatus(value: string, interactionId: string): boolean {
+  return readXStatus(value)?.interactionId === interactionId;
+}
+
+function readXStatus(value: string): { handle: string; interactionId: string } | null {
+  try {
+    const url = new URL(value);
+    const match = /^\/([a-zA-Z0-9_]+)\/status\/([0-9]+)\/?$/u.exec(url.pathname);
+    return url.origin === "https://x.com" && match?.[1] !== undefined && match[2] !== undefined
+      ? { handle: match[1].toLowerCase(), interactionId: match[2] }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function waitForRepostCanonical(
+  page: BrowserPagePort,
+  sourceInteractionId: string
+): Promise<{ handle: string; interactionId: string } | null> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 15_000) {
+    const status = readXStatus(page.url());
+    if (status !== null && status.interactionId !== sourceInteractionId) return status;
+    if (isXLoginUrl(page.url()) || isXChallengeUrl(page.url())) return null;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
 }
 
 export const BrowserEngine = BrowserCleanerEngine;

@@ -54,10 +54,40 @@ export function createStatusCommand(
       if (status.interactions.total === 0) {
         dependencies.output.writeLine(dependencies.translator.translate("status.emptyCatalog"));
       }
+      await writeExecutorLockStatus(dependencies, repositories);
     } finally {
       repositories.close?.();
     }
   };
+}
+
+/** Read-only lock inspection; `status` never writes or removes the lock file. */
+async function writeExecutorLockStatus(
+  dependencies: CliDependencies,
+  repositories: CliRepositories
+): Promise<void> {
+  const lock = repositories.lock;
+  if (lock?.diagnoseStaleLock === undefined) return;
+  const diagnosis = await lock.diagnoseStaleLock();
+  if (diagnosis === "NOT_HELD") {
+    dependencies.output.writeLine(dependencies.translator.translate("status.lockNotHeld"));
+    return;
+  }
+  if (diagnosis === "UNKNOWN") {
+    dependencies.output.writeLine(dependencies.translator.translate("status.lockUnknown"));
+    return;
+  }
+  const owner = (await lock.readStatus?.()) ?? null;
+  dependencies.output.writeLine(
+    dependencies.translator.translate(
+      diagnosis === "ACTIVE" ? "status.lockActive" : "status.lockStale",
+      {
+        pid: owner?.pid ?? "?",
+        hostname: owner?.hostname ?? "?",
+        acquiredAt: owner?.acquiredAt ?? "?"
+      }
+    )
+  );
 }
 
 async function openRepositories(

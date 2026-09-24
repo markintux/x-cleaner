@@ -56,4 +56,28 @@ describe("ExecutorLock", () => {
 
     await lease.release();
   });
+
+  it("remove a trava obsoleta somente sob pedido explícito e recusa uma trava ativa", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-lock-"));
+    directories.push(directory);
+    const base = {
+      now: () => "2026-03-04T05:06:07.000Z",
+      pid: () => 999,
+      hostname: () => "synthetic-host"
+    };
+    const active = new ExecutorLock(directory, { ...base, isPidAlive: () => true });
+    const lease = await new ExecutorLock(directory, base).acquire();
+
+    expect(await active.diagnoseStaleLock()).toBe("ACTIVE");
+    expect(await active.releaseStaleLock()).toBe(false);
+    expect(await active.readStatus()).not.toBeNull();
+
+    const observer = new ExecutorLock(directory, { ...base, isPidAlive: () => false });
+    expect(await observer.releaseStaleLock()).toBe(true);
+    expect(await observer.readStatus()).toBeNull();
+    expect(await observer.diagnoseStaleLock()).toBe("NOT_HELD");
+    expect(await observer.releaseStaleLock()).toBe(false);
+
+    await expect(lease.release()).rejects.toThrow("EXECUTOR_LOCK_OWNERSHIP_LOST");
+  });
 });

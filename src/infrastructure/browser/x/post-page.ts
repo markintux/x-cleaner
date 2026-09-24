@@ -33,6 +33,9 @@ export interface PostPageOptions extends Partial<PostPageInput> {
   readonly expectedAuthor?: string;
   readonly authorHandle?: string;
   readonly statusId?: string;
+  readonly evidenceTimeoutMs?: number;
+  readonly pollIntervalMs?: number;
+  readonly sleep?: (milliseconds: number) => Promise<void>;
 }
 
 export type PostPageResult = PostPageEvidence;
@@ -44,6 +47,9 @@ export type PostPageResult = PostPageEvidence;
 export class PostPage {
   private readonly page: BrowserPagePort;
   private readonly options: PostPageOptions;
+  private readonly evidenceTimeoutMs: number;
+  private readonly pollIntervalMs: number;
+  private readonly sleep: (milliseconds: number) => Promise<void>;
 
   constructor(page: BrowserPagePort, options?: PostPageOptions);
   constructor(page: BrowserPagePort, expectedHandle: string, expectedInteractionId: string);
@@ -60,6 +66,11 @@ export class PostPage {
             ...(expectedInteractionId === undefined ? {} : { expectedInteractionId })
           }
         : optionsOrHandle;
+    this.evidenceTimeoutMs = this.options.evidenceTimeoutMs ?? 15_000;
+    this.pollIntervalMs = this.options.pollIntervalMs ?? 250;
+    this.sleep =
+      this.options.sleep ??
+      ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   }
 
   async execute(input?: PostPageInput): Promise<PostPageEvidence> {
@@ -88,12 +99,12 @@ export class PostPage {
       return unknown("INVALID_EXPECTED_IDENTITY");
     }
 
-    const initialState = await this.readNonInteractiveState();
-    if (initialState !== null) {
-      return initialState;
+    const initial = await this.waitForInitialEvidence(expected.expectedInteractionId);
+    if (initial.state !== null) {
+      return initial.state;
     }
 
-    const target = await this.findTarget();
+    const target = initial.target;
     if (target === null) {
       return unknown("TARGET_EVIDENCE_MISSING");
     }
@@ -103,7 +114,7 @@ export class PostPage {
       return identity;
     }
 
-    const menu = await this.findOneInTarget(target, X_SELECTORS.post.menu);
+    const menu = await this.waitForOne(target, X_SELECTORS.post.menu);
     let action: BrowserLocatorPort | null = null;
     if (menu !== null) {
       await menu.click();
@@ -111,9 +122,9 @@ export class PostPage {
       if (afterMenuState !== null) {
         return afterMenuState;
       }
-      action = await this.findDeleteAction(target);
+      action = await this.waitForDeleteAction(this.page);
     } else {
-      action = await this.findOneInTarget(target, X_SELECTORS.post.directDelete);
+      action = await this.waitForOne(target, X_SELECTORS.post.directDelete);
     }
 
     if (action === null) {
@@ -121,13 +132,13 @@ export class PostPage {
     }
 
     await action.click();
-    const dialog = await this.findOne(this.page, X_SELECTORS.post.dialog);
+    const dialog = await this.waitForOne(this.page, X_SELECTORS.post.dialog);
     if (dialog === null) {
       const afterAction = await this.readAfterDeleteAction(target);
       return afterAction ?? unknown("DELETE_CONFIRMATION_MISSING");
     }
 
-    const confirmation = await this.findConfirmation(dialog);
+    const confirmation = await this.waitForConfirmation(dialog);
     if (confirmation === null) {
       return unknown("DELETE_CONFIRMATION_CONTROL_MISSING");
     }
@@ -217,6 +228,15 @@ export class PostPage {
   ): Promise<PostPageEvidence | null> {
     let observedIds = await this.readTargetValues(target, X_SELECTORS.post.idAttributes);
     if (observedIds.length === 0) {
+      const exactStatusLink = this.scopedLocator(
+        target,
+        `a[href*="/status/${expected.expectedInteractionId}"]`
+      );
+      if (exactStatusLink !== null && (await exactStatusLink.count()) > 0) {
+        observedIds = [expected.expectedInteractionId];
+      }
+    }
+    if (observedIds.length === 0) {
       const urlIdentity = readStatusUrlIdentity(this.page.url());
       if (urlIdentity === null) {
         return unknown("STATUS_ID_EVIDENCE_MISSING");
@@ -236,7 +256,15 @@ export class PostPage {
       return unknown("STATUS_IDENTITY_MISMATCH");
     }
 
-    const observedAuthors = await this.readAuthorEvidence(target);
+    const observedAuthors = [...(await this.readAuthorEvidence(target))];
+    const exactAuthorLink = this.scopedLocator(target, `a[href="/${expected.expectedHandle}"]`);
+    if (
+      observedAuthors.length === 0 &&
+      exactAuthorLink !== null &&
+      (await exactAuthorLink.count()) > 0
+    ) {
+      observedAuthors.push(expected.expectedHandle);
+    }
     if (observedAuthors.length !== 1) {
       return unknown("AUTHOR_EVIDENCE_MISSING");
     }
@@ -298,13 +326,23 @@ export class PostPage {
     return values;
   }
 
-  private async findTarget(): Promise<BrowserLocatorPort | null> {
+  private async findTarget(expectedInteractionId: string): Promise<BrowserLocatorPort | null> {
+    const exactLinkTarget = this.page.locator(
+      `article:has(a[href*="/status/${expectedInteractionId}"])`
+    );
+    if ((await exactLinkTarget.count()) === 1) {
+      const first = exactLinkTarget.first();
+      if (await this.isUsable(first)) {
+        return first;
+      }
+    }
     for (const selector of X_SELECTORS.post.target) {
       const locator = this.page.locator(selector);
       const count = await locator.count();
       if (count === 1) {
         const first = locator.first();
-        if (await this.isUsable(first)) {
+        const structuralIds = await this.readTargetValues(first, X_SELECTORS.post.idAttributes);
+        if (structuralIds.length > 0 && (await this.isUsable(first))) {
           return first;
         }
       }
@@ -312,12 +350,30 @@ export class PostPage {
     return null;
   }
 
-  private async findDeleteAction(target: BrowserLocatorPort): Promise<BrowserLocatorPort | null> {
-    const stable = await this.findOneInTarget(target, X_SELECTORS.post.deleteAction);
+  private async waitForInitialEvidence(expectedInteractionId: string): Promise<{
+    readonly state: PostPageEvidence | null;
+    readonly target: BrowserLocatorPort | null;
+  }> {
+    const startedAt = Date.now();
+    while (true) {
+      const state = await this.readNonInteractiveState();
+      if (state !== null) return { state, target: null };
+      const target = await this.findTarget(expectedInteractionId);
+      if (target !== null) return { state: null, target };
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= this.evidenceTimeoutMs) return { state: null, target: null };
+      await this.sleep(Math.min(this.pollIntervalMs, this.evidenceTimeoutMs - elapsed));
+    }
+  }
+
+  private async findDeleteAction(
+    scope: BrowserPagePort | BrowserLocatorPort
+  ): Promise<BrowserLocatorPort | null> {
+    const stable = await this.findOne(scope, X_SELECTORS.post.deleteAction);
     if (stable !== null) {
       return stable;
     }
-    return this.findByAccessibleText(target, "menuitem", X_TEXT_KEYS.deleteAction);
+    return this.findByAccessibleText(scope, "menuitem", X_TEXT_KEYS.deleteAction);
   }
 
   private async findConfirmation(dialog: BrowserLocatorPort): Promise<BrowserLocatorPort | null> {
@@ -329,6 +385,38 @@ export class PostPage {
       (await this.findByAccessibleText(dialog, "button", X_TEXT_KEYS.confirmDelete)) ??
       this.findByAccessibleText(dialog, "menuitem", X_TEXT_KEYS.confirmDelete)
     );
+  }
+
+  private async waitForDeleteAction(
+    scope: BrowserPagePort | BrowserLocatorPort
+  ): Promise<BrowserLocatorPort | null> {
+    return this.waitFor(() => this.findDeleteAction(scope));
+  }
+
+  private async waitForConfirmation(
+    dialog: BrowserLocatorPort
+  ): Promise<BrowserLocatorPort | null> {
+    return this.waitFor(() => this.findConfirmation(dialog));
+  }
+
+  private async waitForOne(
+    scope: BrowserPagePort | BrowserLocatorPort,
+    selectors: readonly string[]
+  ): Promise<BrowserLocatorPort | null> {
+    return this.waitFor(() => this.findOne(scope, selectors));
+  }
+
+  private async waitFor(
+    find: () => Promise<BrowserLocatorPort | null>
+  ): Promise<BrowserLocatorPort | null> {
+    const startedAt = Date.now();
+    while (true) {
+      const found = await find();
+      if (found !== null) return found;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= this.evidenceTimeoutMs) return null;
+      await this.sleep(Math.min(this.pollIntervalMs, this.evidenceTimeoutMs - elapsed));
+    }
   }
 
   private async findOneInTarget(
@@ -380,7 +468,10 @@ export class PostPage {
       return null;
     }
     for (const text of texts) {
-      const locator = scope.getByRole(role, { name: text, exact: true });
+      const locator = scope.getByRole(role, {
+        name: new RegExp(`^${escapeRegex(text)}$`, "iu"),
+        exact: true
+      });
       if ((await locator.count()) === 1) {
         const first = locator.first();
         if (await this.isUsable(first)) {
@@ -449,6 +540,10 @@ function validateInteractionId(value: string): string {
     throw new Error("INVALID_INTERACTION_ID");
   }
   return value;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function normalizeAuthor(raw: string | null): string | null {

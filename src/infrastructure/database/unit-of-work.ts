@@ -65,6 +65,12 @@ export class UnitOfWork {
       const transaction = new SqliteRepositoryTransaction(connection);
       recovered = this.runs.recoverStaleProcessing(work.runId, work.recoveredAt, transaction);
       this.audit.appendCheckpoint(work.checkpoint, transaction);
+      for (const batch of work.batches ?? []) {
+        this.runs.updateBatchStatus(batch.id, batch.status, batch.finishedAt, transaction);
+      }
+      if (work.run !== undefined) {
+        this.runs.updateRunStatus(work.runId, work.run.status, work.run.state, transaction);
+      }
     });
     return recovered;
   }

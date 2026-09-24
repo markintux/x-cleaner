@@ -16,7 +16,22 @@ export interface RunItemUpdate {
   readonly lastErrorCode?: string | null;
 }
 
+export interface RunOverview {
+  readonly runId: string;
+  readonly types: readonly string[];
+  readonly status: CleaningRun["status"];
+  readonly pauseReason: CleaningRun["pauseReason"];
+  readonly total: number;
+  readonly processed: number;
+  readonly completed: number;
+  readonly pending: number;
+  readonly failed: number;
+  readonly overlappingPending: number;
+}
+
 export interface RunRepository {
+  /** Aggregate-only menu projection; never selects interaction text or X IDs. */
+  listRunOverviews?(): readonly RunOverview[];
   createRun(run: CleaningRun, transaction?: RepositoryTransaction): void;
   getRun(runId: string): CleaningRun | null;
   getRunForPlan(planId: string): CleaningRun | null;
@@ -26,6 +41,8 @@ export interface RunRepository {
   getRunProgressRows?(runId: string): readonly RunProgressRow[];
   createBatch(batch: RunBatch, transaction?: RepositoryTransaction): void;
   getBatch(batchId: string): RunBatch | null;
+  /** Ordered batch projection; recovery uses it to find unclosed boundaries. */
+  listBatches?(runId: string): readonly RunBatch[];
   pageEligibleItems(
     runId: string,
     now: string,

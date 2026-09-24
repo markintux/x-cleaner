@@ -9,7 +9,7 @@ import { LikeParser } from "../ytd/like-parser.js";
 import { TweetParser } from "../ytd/tweet-parser.js";
 import type { ParsedAccount, ParsedArchive, NormalizedArchiveInteraction } from "../ytd/types.js";
 
-export const YTD_ADAPTER_KEY = "ytd-synthetic-v1";
+export const YTD_ADAPTER_KEY = "x-archive-ytd-v1";
 
 export interface YtdAssignmentEvidence {
   readonly entry: string;
@@ -32,6 +32,8 @@ export class YtdArchiveAdapter implements ArchiveAdapter {
   async discover(source: ArchiveSource): Promise<readonly YtdAssignmentEvidence[]> {
     const evidence: YtdAssignmentEvidence[] = [];
     for (const entry of await source.entries()) {
+      if (!/\.(?:js|json)$/iu.test(entry.name)) continue;
+
       let text: string;
       try {
         text = await source.readText(entry.name);

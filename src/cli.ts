@@ -12,9 +12,7 @@ export async function runCli(
   const program = createProgram(root.dependencies);
   program.exitOverride();
   try {
-    const cliArguments = [...arguments_];
-    if (cliArguments.length === 2) cliArguments.push("menu");
-    await program.parseAsync(cliArguments);
+    await program.parseAsync([...arguments_]);
     return 0;
   } catch (error) {
     if (isSuccessfulCommanderExit(error)) return 0;

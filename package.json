@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "CLI local-first para organizar e limpar interações da própria conta no X.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/markintux/x-cleaner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/markintux/x-cleaner/issues"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=24"
@@ -20,6 +27,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

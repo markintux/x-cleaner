@@ -36,7 +36,9 @@ export function createMenuCommand(
       if (choice === "e") {
         write("");
         await createStatusCommand(dependencies)(
-          options.dataDir === undefined ? {} : { dataDir: options.dataDir }
+          options.dataDir === undefined
+            ? { presentation: "menu" }
+            : { dataDir: options.dataDir, presentation: "menu" }
         );
         await prompt.ask(translate("menu.backToTable"));
         write("");

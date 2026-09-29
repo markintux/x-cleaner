@@ -21,6 +21,7 @@ import { DirectoryArchiveSource } from "./infrastructure/archive/directory-archi
 import { YtdArchiveAdapter } from "./infrastructure/archive/adapters/ytd-archive-adapter.js";
 import { ZipArchiveSource } from "./infrastructure/archive/zip-archive-source.js";
 import { BrowserContextFactory } from "./infrastructure/browser/browser-context-factory.js";
+import { BrowserPrerequisiteProbe } from "./infrastructure/browser/browser-prerequisites.js";
 import { XLoginGateway } from "./infrastructure/browser/x-login-gateway.js";
 import {
   ManualChromeLauncher,
@@ -54,6 +55,7 @@ import {
   type CliOutput,
   type CliRepositories,
   type CliSignalAdapter,
+  type BrowserPrerequisitePort,
   type SessionPrompt
 } from "./cli/dependencies.js";
 import { ReadlinePrompt } from "./cli/prompt.js";
@@ -86,6 +88,7 @@ export interface CompositionRootOptions {
     | { execute(): Promise<LoginSessionResult> }
     | Promise<{ execute(): Promise<LoginSessionResult> }>;
   readonly archiveDetector?: ArchiveDetector;
+  readonly browserPrerequisites?: BrowserPrerequisitePort;
 }
 
 export interface CompositionRoot {
@@ -159,6 +162,7 @@ export function createCompositionRoot(options: CompositionRootOptions = {}): Com
       parser: new DetectedArchiveParser(detector),
       sourceFactory: createArchiveSource
     },
+    browserPrerequisites: options.browserPrerequisites ?? new BrowserPrerequisiteProbe(),
     repositoryFactory: (dataDirectory) => openRepositories(dataDirectory, clock),
     session: {
       prompt: sessionPrompt,

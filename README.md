@@ -14,15 +14,78 @@ somente dados sintéticos e páginas locais; eles não comprovam uma execução 
 O repositório não deve ser tornado público, e o pacote não deve ser publicado,
 sem uma autorização separada depois dos gates de validação.
 
+## Instalação simples (após publicação no npm)
+
+Estas instruções já estão preparadas, mas o pacote **ainda não foi publicado**.
+Você não precisa clonar o projeto nem compilar o código quando ele estiver
+disponível no npm.
+
+1. Instale o [Node.js 24 LTS](https://nodejs.org/en/download) e o
+   [Google Chrome](https://www.google.com/chrome/). O instalador do Node inclui
+   o npm. Se já tiver Node, confirme com `node --version`: a versão deve começar
+   com `v24`.
+2. Abra o terminal do seu sistema e execute:
+
+   ```text
+   npm install --global x-cleaner
+   x-cleaner doctor
+   ```
+
+3. No X, solicite e baixe o Archive oficial da sua própria conta. Depois
+   informe o caminho do ZIP ao programa:
+
+   ```text
+   x-cleaner "/caminho/para/x-archive.zip"
+   ```
+
+   Também é possível informar uma pasta já extraída. O X Cleaner lê a origem
+   sem modificá-la ou enviá-la para um servidor. Para abrir o menu depois da
+   importação, execute apenas `x-cleaner`.
+
+### Terminal e caminho do arquivo em cada sistema
+
+| Sistema | Abra                              | Exemplo de importação                                  |
+| ------- | --------------------------------- | ------------------------------------------------------ |
+| Windows | PowerShell ou Terminal do Windows | `x-cleaner "C:\Users\SeuNome\Downloads\x-archive.zip"` |
+| macOS   | Terminal                          | `x-cleaner "$HOME/Downloads/x-archive.zip"`            |
+| Linux   | Terminal                          | `x-cleaner "$HOME/Downloads/x-archive.zip"`            |
+
+Troque `x-archive.zip` pelo nome real do arquivo baixado. Use aspas quando o
+caminho contiver espaços. No Windows, você também pode arrastar o ZIP do
+Explorador até o terminal após digitar `x-cleaner `; confira o caminho antes de
+pressionar Enter. `--data-dir` escolhe onde guardar os **dados do programa**,
+não onde encontrar o Archive.
+
+`x-cleaner doctor` mostra o diretório local dos dados e verifica Node, Chrome e
+o Chromium opcional do Playwright. Ele não abre o navegador, não acessa o X e
+não lê o Archive. A presença dos programas não garante que o X aceitará o login
+ou que a interface atual será reconhecida.
+
+### Atualizar, desinstalar e resolver problemas
+
+Depois da publicação, `npm install --global x-cleaner` também atualiza o
+programa. `npm uninstall --global x-cleaner` o remove, mas preserva o Archive e
+os dados locais descritos abaixo.
+
+- `node` ou `npm` não é reconhecido: instale o Node 24, abra outro terminal e
+  confirme com `node --version` e `npm --version`.
+- `x-cleaner` não é reconhecido: abra outro terminal e repita a instalação. Se
+  o npm mostrar erro de permissão, siga a
+  [orientação oficial do npm](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally/).
+  Não execute o X Cleaner como administrador para contornar esse erro.
+- O `doctor` não encontra Chrome: instale Google Chrome no local padrão do
+  sistema e execute `x-cleaner doctor` novamente. No Linux, escolha o pacote
+  do Chrome compatível com sua distribuição.
+- O Archive não é encontrado: confira o caminho completo, as aspas e se o ZIP
+  ainda está na pasta Downloads. Veja a
+  [solução de problemas](https://github.com/markintux/x-cleaner/blob/main/docs/troubleshooting.md).
+
 ## Requisitos
 
-- Node.js 24 LTS e npm compatível com o `package-lock.json`.
+- Node.js 24 LTS e npm.
 - macOS, Linux ou Windows.
-- Chromium do Playwright instalado para comandos que abrem a sessão visível:
-  `npx playwright install chromium`.
-- Se esse binário não estiver disponível, o CLI pode usar uma instalação local
-  do Google Chrome, ainda com o perfil dedicado do X Cleaner e sem reutilizar o
-  perfil cotidiano.
+- Google Chrome instalado para o login manual. Se o Chromium do Playwright não
+  estiver disponível, a execução pode usar o Chrome local com o perfil dedicado.
 - Uma conta própria no X e o X Archive oficial baixado pelo fluxo de configurações
   da própria conta. O X Cleaner nunca solicita nem armazena a senha.
 
@@ -46,16 +109,22 @@ parada não limpa, o `.executor.lock` sobrevive: consulte `x-cleaner status` e,
 confirmando que nenhum executor está ativo, repita o comando com
 `--release-stale-lock`. Ver `docs/troubleshooting.md`.
 
-## Instalação a partir do código-fonte
+## Instalação a partir do código-fonte (contribuidores)
 
-O projeto ainda não é instalado do npm. Em uma cópia autorizada do repositório:
+Enquanto o pacote não é publicado, use uma cópia autorizada do repositório.
+Com Node 24 e Google Chrome instalados:
 
 ```bash
 npm ci
-npx playwright install chromium
 npm run build
+node dist/cli.js doctor
 node dist/cli.js --help
 ```
+
+Para instalar também o Chromium compatível com o Playwright fixado no projeto,
+execute `npx playwright install chromium` **na pasta do projeto**. No Linux, o
+navegador pode exigir bibliotecas do sistema; veja as
+[instruções do Playwright](https://playwright.dev/docs/browsers).
 
 Os artefatos de distribuição podem ser inspecionados localmente com
 `npm pack --dry-run`; não há comando de publicação neste projeto.
@@ -78,21 +147,28 @@ disponíveis para importação, simulação, sessão, diagnóstico e relatórios
 
 ## Fluxo seguro
 
+Os exemplos abaixo usam o comando da futura instalação por npm. Na instalação
+a partir do código-fonte, substitua `x-cleaner` por `node dist/cli.js` e execute
+os comandos na pasta do projeto. `--data-dir` é opcional; se você o usar, repita
+o **mesmo diretório** em todos os comandos para trabalhar com o mesmo catálogo.
+
 1. No X, solicite e baixe o Archive oficial da própria conta. Preserve o ZIP
    original e escolha um diretório local privado.
-2. Importe sem alterar o arquivo de origem:
+2. Importe sem alterar o arquivo de origem (ZIP ou diretório extraído):
 
    ```bash
-   node dist/cli.js import /caminho/para/x-archive.zip --data-dir ./x-cleaner-data
-   node dist/cli.js status --data-dir ./x-cleaner-data
+   x-cleaner "/caminho/para/x-archive.zip"
+   x-cleaner status
    ```
+
+   `x-cleaner import <caminho>` continua disponível.
 
 3. Crie e revise uma simulação. Os tipos podem ser repetidos e as datas são
    limites inclusivos:
 
    ```bash
-   node dist/cli.js dry-run --data-dir ./x-cleaner-data --type POST --type REPLY
-   node dist/cli.js dry-run --data-dir ./x-cleaner-data --type REPOST --from 2024-01-01
+   x-cleaner dry-run --type POST --type REPLY
+   x-cleaner dry-run --type REPOST --from 2024-01-01
    ```
 
    `dry-run` não abre o navegador e não altera o X. O plano exibido é um
@@ -101,17 +177,24 @@ disponíveis para importação, simulação, sessão, diagnóstico e relatórios
 4. Faça login manual no navegador oficial e confirme a conta detectada:
 
    ```bash
-   node dist/cli.js session login --data-dir ./x-cleaner-data
-   node dist/cli.js session status --data-dir ./x-cleaner-data
+   x-cleaner session login
+   x-cleaner session status
    ```
+
+   O Chrome abre com um perfil separado do seu navegador habitual. Entre no X
+   diretamente nessa janela, feche-a quando o programa pedir e confirme no
+   terminal **somente se** a conta detectada for a sua.
 
 5. Para cada etapa destrutiva, revise a saída e use uma autorização nova. O
    terminal exige a palavra exata `APAGAR`; ela significa que a etapa aprovada
    pode alterar a conta. Comece com um item:
 
    ```bash
-   node dist/cli.js run <plan-id> --limit 1 --data-dir ./x-cleaner-data
+   x-cleaner run ID_DO_PLANO --limit 1
    ```
+
+   Substitua `ID_DO_PLANO` pelo identificador mostrado na simulação. O programa
+   mostrará conta e itens antes de pedir `APAGAR`. Se não tiver certeza, cancele.
 
    Depois, se o resultado foi conferido no X e o proprietário autorizou uma
    nova etapa, use um limite pequeno. Não existe autorização implícita para uma
@@ -121,9 +204,11 @@ disponíveis para importação, simulação, sessão, diagnóstico e relatórios
    retome apenas após revisar o estado:
 
    ```bash
-   node dist/cli.js resume <run-id> --limit 10 --data-dir ./x-cleaner-data
-   node dist/cli.js report <run-id> --data-dir ./x-cleaner-data
+   x-cleaner resume ID_DA_EXECUCAO --limit 10
+   x-cleaner report ID_DA_EXECUCAO
    ```
+
+   Substitua `ID_DA_EXECUCAO` pelo identificador exibido pelo programa.
 
    Itens já concluídos ou com resultado terminal não fatal não são repetidos.
    Sessão expirada, limite de taxa, desafio de segurança e estado desconhecido
@@ -148,8 +233,10 @@ Para remover somente o perfil dedicado, preservando catálogo, banco, logs e
 relatórios, confirme a pergunta do comando:
 
 ```bash
-node dist/cli.js session clear --data-dir ./x-cleaner-data
+x-cleaner session clear
 ```
+
+Na instalação a partir do código-fonte, use `node dist/cli.js session clear`.
 
 Para apagar todo o diretório local, pare todos os processos e remova-o
 manualmente depois de revisar os relatórios. Isso é separado da limpeza da
@@ -182,11 +269,12 @@ seletores. Inglês e espanhol são extensões futuras do catálogo; o CLI entreg
 
 ## Segurança, licença e marca
 
-Leia [SECURITY.md](SECURITY.md), [PRIVACY.md](PRIVACY.md),
-[CONTRIBUTING.md](CONTRIBUTING.md),
-[docs/troubleshooting.md](docs/troubleshooting.md) e
-[docs/architecture.md](docs/architecture.md) antes de contribuir. A licença é
-[MIT](LICENSE).
+Leia [segurança](https://github.com/markintux/x-cleaner/blob/main/SECURITY.md),
+[privacidade](https://github.com/markintux/x-cleaner/blob/main/PRIVACY.md),
+[contribuição](https://github.com/markintux/x-cleaner/blob/main/CONTRIBUTING.md),
+[solução de problemas](https://github.com/markintux/x-cleaner/blob/main/docs/troubleshooting.md)
+e [arquitetura](https://github.com/markintux/x-cleaner/blob/main/docs/architecture.md)
+antes de contribuir. A licença é [MIT](https://github.com/markintux/x-cleaner/blob/main/LICENSE).
 
 X Cleaner é um projeto independente e não é afiliado, endossado ou patrocinado
 por X Corp., Twitter ou qualquer entidade relacionada. “X” e outras marcas

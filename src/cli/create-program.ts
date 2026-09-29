@@ -8,6 +8,7 @@ import { createRunCommand } from "./commands/run.js";
 import { createResumeCommand } from "./commands/resume.js";
 import { createMenuCommand } from "./commands/menu.js";
 import { createReportCommand } from "./commands/report.js";
+import { createDoctorCommand } from "./commands/doctor.js";
 import type { CliDependencies } from "./dependencies.js";
 import type { MessageKey } from "../i18n/catalog.js";
 
@@ -29,7 +30,15 @@ export function createProgram(dependencies: CliDependencies): Command {
     .helpOption("-h, --help", translate("cli.helpOption"))
     .helpCommand("help [command]", translate("cli.helpCommand"))
     .option("--data-dir <path>", translate("cli.dataDirectoryOption"))
-    .option("--diagnostics", translate("cli.diagnosticsOption"));
+    .option("--diagnostics", translate("cli.diagnosticsOption"))
+    .argument("[path]", translate("cli.archivePathArgument"))
+    .action(async (input: string | undefined, _options, command: Command) => {
+      if (input === undefined) {
+        await createMenuCommand(dependencies)(command.optsWithGlobals());
+        return;
+      }
+      await createImportCommand(dependencies)(input, command.optsWithGlobals());
+    });
   program.configureHelp({
     formatHelp: (command, helper) => formatPortugueseHelp(command, helper, dependencies)
   });
@@ -47,6 +56,13 @@ export function createProgram(dependencies: CliDependencies): Command {
     .description(translate("cli.statusDescription"))
     .action(async (_options, command) => {
       await createStatusCommand(dependencies)(command.optsWithGlobals());
+    });
+
+  program
+    .command("doctor")
+    .description(translate("cli.doctorDescription"))
+    .action(async (_options, command) => {
+      await createDoctorCommand(dependencies)(command.optsWithGlobals());
     });
 
   program

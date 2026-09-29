@@ -195,7 +195,19 @@ describe("menu interativo", () => {
       await program.parseAsync(["menu", "--data-dir", fixture.directory], { from: "user" });
 
       expect(output.filter((line) => line.includes("X CLEANER  ·  PAINEL"))).toHaveLength(2);
-      expect(output.join("\n")).toContain("Executor: nenhum lock ativo");
+      const state = output.join("\n");
+      expect(state).toContain("X CLEANER  ·  ESTADO LOCAL");
+      expect(state).toMatch(/│ Campo\s+│ Estado\s+│/u);
+      expect(state).toMatch(/│ Importações\s+│ 1\s+│/u);
+      expect(state).toMatch(/│ Catálogo\s+│/u);
+      expect(state).toMatch(/│ Executor\s+│ Livre\s+│/u);
+      const titleIndex = output.indexOf("X CLEANER  ·  ESTADO LOCAL");
+      const tableEnd = output.findIndex(
+        (line, index) => index > titleIndex && line.startsWith("└")
+      );
+      const tableLines = output.slice(titleIndex + 1, tableEnd + 1);
+      expect(tableLines.length).toBeGreaterThan(5);
+      expect(new Set(tableLines.map((line) => line.length)).size).toBe(1);
       expect(prompt.questions[1]).toContain("voltar à tabela");
       expect(prompt.questions).toHaveLength(3);
     } finally {

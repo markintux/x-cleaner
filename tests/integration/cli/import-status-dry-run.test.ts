@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProgram } from "../../../src/cli/create-program.js";
 import type { CliOutput } from "../../../src/cli/dependencies.js";
 import { createCompositionRoot } from "../../../src/composition-root.js";
+import { FakePrompt } from "../../support/fake-prompt.js";
 
 const syntheticFixture = path.resolve("tests/fixtures/x-archive/synthetic");
 const emptyFixture = path.resolve("tests/fixtures/x-archive/empty");
@@ -32,8 +33,9 @@ describe("import, status e dry-run", () => {
     await cp(syntheticFixture, directory, { recursive: true });
     await createZip(directory, zipPath);
 
-    const directoryOutput = await runCli(["import", directory, "--data-dir", dataDirectory]);
-    const zipOutput = await runCli(["import", zipPath, "--data-dir", dataDirectory]);
+    const directoryOutput = await runCli([directory, "--data-dir", dataDirectory]);
+    const zipOutput = await runCli(["--data-dir", dataDirectory, zipPath]);
+    const legacyOutput = await runCli(["import", zipPath, "--data-dir", dataDirectory]);
     const statusOutput = await runCli(["status", "--data-dir", dataDirectory]);
 
     expect(directoryOutput.join("\n")).toContain("Adaptador: x-archive-ytd-v1");
@@ -41,7 +43,8 @@ describe("import, status e dry-run", () => {
     expect(directoryOutput.join("\n")).toContain("POST: 1");
     expect(directoryOutput.join("\n")).toContain("Total: 4");
     expect(zipOutput.join("\n")).toContain("Reutilizados: 4");
-    expect(statusOutput.join("\n")).toContain("Importações: 2");
+    expect(legacyOutput.join("\n")).toContain("Reutilizados: 4");
+    expect(statusOutput.join("\n")).toContain("Importações: 3");
     expect(statusOutput.join("\n")).toContain("Catálogo: 4 interações");
     expect(statusOutput.join("\n")).toContain("LIKE: 1");
     expect(statusOutput.join("\n")).not.toContain("synthetic original post");
@@ -54,8 +57,24 @@ describe("import, status e dry-run", () => {
       "archive.import.started",
       "archive.import.completed",
       "archive.import.started",
+      "archive.import.completed",
+      "archive.import.started",
       "archive.import.completed"
     ]);
+  });
+
+  it("abre o menu quando nenhum caminho é informado", async () => {
+    const workspace = await mkdtemp(path.join(os.tmpdir(), "x-cleaner-menu-default-"));
+    temporaryDirectories.push(workspace);
+    const lines: string[] = [];
+    const root = createCompositionRoot({ output: { writeLine: (line) => lines.push(line) } });
+    const program = createProgram({ ...root.dependencies, prompt: new FakePrompt(["0"]) });
+    program.exitOverride();
+
+    await program.parseAsync(["--data-dir", path.join(workspace, "data")], { from: "user" });
+
+    expect(lines.join("\n")).toContain("PAINEL DE LIMPEZA");
+    expect(lines.join("\n")).toContain("X Cleaner encerrado");
   });
 
   it("exibe SIMULAÇÃO, salva o plano e nunca chama um cleaner engine", async () => {

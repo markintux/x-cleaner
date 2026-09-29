@@ -48,7 +48,7 @@ export class ManualChromeLauncher implements ManualBrowserLauncherPort {
   }
 }
 
-function chromeExecutables(
+export function chromeExecutables(
   platform: NodeJS.Platform,
   environment: NodeJS.ProcessEnv
 ): readonly string[] {
@@ -58,7 +58,9 @@ function chromeExecutables(
   if (platform === "win32") {
     return [environment.PROGRAMFILES, environment["PROGRAMFILES(X86)"], environment.LOCALAPPDATA]
       .filter((directory): directory is string => directory !== undefined && directory !== "")
-      .map((directory) => path.join(directory, "Google", "Chrome", "Application", "chrome.exe"));
+      .map((directory) =>
+        path.win32.join(directory, "Google", "Chrome", "Application", "chrome.exe")
+      );
   }
   return ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser"];
 }

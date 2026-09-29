@@ -1,5 +1,23 @@
 # Solução de problemas
 
+## Instalação e navegador
+
+Execute `x-cleaner doctor` depois de instalar o programa. O diagnóstico é
+local: não abre navegador, não acessa o X e não lê o Archive. Node.js 24 LTS e
+Google Chrome devem aparecer como encontrados. Se `node` ou `x-cleaner` não for
+reconhecido, abra um terminal novo e confira as etapas do [README](../README.md).
+No Linux, instale a versão do Chrome compatível com sua distribuição. O Chrome
+é usado para login manual com perfil dedicado; o Chromium do Playwright é
+opcional porque a execução pode recorrer ao Chrome instalado. Encontrar um
+arquivo de navegador não comprova que ele abrirá nem que o X aceitará o login.
+
+Se a instalação global do npm falhar com erro de permissão, siga a
+[orientação oficial](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally/).
+Não use `sudo x-cleaner` nem execute a limpeza como administrador. Se o
+navegador abrir e falhar por uma biblioteca ausente no Linux, consulte os
+[requisitos do Playwright](https://playwright.dev/docs/browsers) e a mensagem
+local antes de instalar a dependência correspondente.
+
 ## Sessão expirada
 
 Uma sessão expirada pausa a execução e preserva o checkpoint. Não apague o

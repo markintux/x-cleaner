@@ -22,6 +22,11 @@ import type { ReportRepository } from "../application/ports/report-repository.js
 import type { AuditLogger } from "../application/ports/audit-logger.js";
 import type { ArchiveParser } from "../application/ports/archive-parser.js";
 import type { ArchiveSource } from "../application/ports/archive-source.js";
+import type { BrowserPrerequisitePort } from "../application/ports/browser-prerequisites.js";
+export type {
+  BrowserPrerequisitePort,
+  BrowserPrerequisiteResult
+} from "../application/ports/browser-prerequisites.js";
 import type { RepositoryTransactionRunner } from "../application/ports/repository-transaction.js";
 import type { Translator } from "../i18n/translator.js";
 import type { DetectedAccount } from "../domain/account.js";
@@ -127,6 +132,7 @@ export interface CliDependencies {
   readonly auditLogger?: AuditLogger;
   readonly auditLoggerFactory?: (dataDirectory: string) => AuditLogger;
   readonly archive?: CliArchiveDependencies;
+  readonly browserPrerequisites?: BrowserPrerequisitePort;
   readonly reportWriterFactory?: (
     dataDirectory: string,
     reports: ReportRepository | undefined

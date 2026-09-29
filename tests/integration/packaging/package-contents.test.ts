@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -68,10 +68,7 @@ describe("conteúdo e execução do pacote", () => {
     await mkdir(consumer, { recursive: true });
     await writeFile(path.join(consumer, "package.json"), JSON.stringify({ private: true }), "utf8");
 
-    const packed = await runNpm(
-      ["pack", "--ignore-scripts", "--pack-destination", staging, "--json"],
-      projectRoot
-    );
+    const packed = await runNpm(["pack", "--pack-destination", staging, "--json"], projectRoot);
     expect(packed.code, packed.stderr || packed.stdout).toBe(0);
     const packedEntries = JSON.parse(packed.stdout) as Array<{ filename?: string }>;
     const filename = packedEntries[0]?.filename;
@@ -92,10 +89,35 @@ describe("conteúdo e execução do pacote", () => {
     expect(help.code, help.stderr || help.stdout).toBe(0);
     expect(help.stdout).toContain("Uso:");
     expect(help.stdout).toContain("Comandos:");
-    for (const command of ["import", "status", "dry-run", "session", "run", "resume", "report"]) {
+    for (const command of [
+      "doctor",
+      "import",
+      "status",
+      "dry-run",
+      "session",
+      "run",
+      "resume",
+      "report"
+    ]) {
       expect(help.stdout).toContain(command);
     }
     expect(help.stdout).not.toContain("Error [");
+
+    const dataDirectory = path.join(workspace, "doctor data");
+    const doctor = await runCommand(
+      process.execPath,
+      [
+        path.join(consumer, "node_modules", "x-cleaner", "dist", "cli.js"),
+        "doctor",
+        "--data-dir",
+        dataDirectory
+      ],
+      consumer
+    );
+    expect(doctor.code, doctor.stderr || doctor.stdout).toBe(0);
+    expect(doctor.stdout).toContain("DIAGNÓSTICO LOCAL");
+    expect(doctor.stdout).toContain(dataDirectory);
+    await expect(access(dataDirectory)).rejects.toMatchObject({ code: "ENOENT" });
   }, 60_000);
 });
 

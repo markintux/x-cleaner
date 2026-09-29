@@ -25,7 +25,7 @@ export async function inspectPackage(rootDirectory = process.cwd()) {
   const files = entries.flatMap((entry) => entry.files?.map((file) => normalize(file.path)) ?? []);
   const errors = [];
 
-  if (packageJson.private !== true) errors.push("package.json precisa manter private=true");
+  if (packageJson.private === true) errors.push("package.json impede a publicação no npm");
   for (const required of REQUIRED_FILES) {
     if (!files.includes(required)) errors.push(`arquivo obrigatório ausente: ${required}`);
   }

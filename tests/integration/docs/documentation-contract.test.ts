@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const root = path.resolve(".");
 
-describe("contratos da documentação de beta privado", () => {
+describe("contratos da documentação do beta", () => {
   it("cobre o fluxo seguro, limitações, privacidade e release separado", async () => {
     const readme = await read("README.md");
     const security = await read("SECURITY.md");
@@ -15,7 +15,7 @@ describe("contratos da documentação de beta privado", () => {
     const architecture = await read("docs/architecture.md");
 
     for (const topic of [
-      /beta privado/iu,
+      /beta público/iu,
       /Node\.js 24/iu,
       /Playwright/iu,
       /Archive/iu,

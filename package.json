@@ -1,7 +1,6 @@
 {
   "name": "x-cleaner",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "CLI local-first para organizar e limpar interações da própria conta no X.",
   "repository": {
@@ -16,7 +15,7 @@
     "node": ">=24"
   },
   "bin": {
-    "x-cleaner": "./dist/cli.js"
+    "x-cleaner": "dist/cli.js"
   },
   "files": [
     "dist/**/*.js",

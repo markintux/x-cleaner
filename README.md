@@ -7,18 +7,16 @@ os registros e os relatórios permanecem no computador local.
 
 ## Estado do projeto
 
-Este repositório está em beta privado. A compatibilidade com um arquivo real e a
-estabilidade da automação diante da interface real do X ainda dependem de
-validação manual controlada pelo proprietário. Os testes automatizados usam
-somente dados sintéticos e páginas locais; eles não comprovam uma execução real.
-O repositório não deve ser tornado público, e o pacote não deve ser publicado,
-sem uma autorização separada depois dos gates de validação.
+O pacote no npm está em beta público; o repositório GitHub permanece privado.
+Houve validação manual limitada com um Archive e uma conta reais, incluindo os
+quatro tipos de interação e lotes pequenos. Isso não garante compatibilidade
+com outros Archives nem estabilidade diante de mudanças na interface do X.
+Os testes automatizados usam somente dados sintéticos e páginas locais; eles
+não comprovam uma execução real.
 
-## Instalação simples (após publicação no npm)
+## Instalação pelo npm
 
-Estas instruções já estão preparadas, mas o pacote **ainda não foi publicado**.
-Você não precisa clonar o projeto nem compilar o código quando ele estiver
-disponível no npm.
+Você não precisa clonar o projeto nem compilar o código.
 
 1. Instale o [Node.js 24 LTS](https://nodejs.org/en/download) e o
    [Google Chrome](https://www.google.com/chrome/). O instalador do Node inclui
@@ -63,7 +61,7 @@ ou que a interface atual será reconhecida.
 
 ### Atualizar, desinstalar e resolver problemas
 
-Depois da publicação, `npm install --global x-cleaner` também atualiza o
+`npm install --global x-cleaner` também atualiza o
 programa. `npm uninstall --global x-cleaner` o remove, mas preserva o Archive e
 os dados locais descritos abaixo.
 
@@ -77,8 +75,7 @@ os dados locais descritos abaixo.
   sistema e execute `x-cleaner doctor` novamente. No Linux, escolha o pacote
   do Chrome compatível com sua distribuição.
 - O Archive não é encontrado: confira o caminho completo, as aspas e se o ZIP
-  ainda está na pasta Downloads. Veja a
-  [solução de problemas](https://github.com/markintux/x-cleaner/blob/main/docs/troubleshooting.md).
+  ainda está na pasta Downloads. Confira também as orientações desta página.
 
 ## Requisitos
 
@@ -107,12 +104,12 @@ para o agendamento e fecha o lote na última fronteira já persistida; o segundo
 encerra o processo de imediato e, de propósito, não persiste nada. Depois de uma
 parada não limpa, o `.executor.lock` sobrevive: consulte `x-cleaner status` e,
 confirmando que nenhum executor está ativo, repita o comando com
-`--release-stale-lock`. Ver `docs/troubleshooting.md`.
+`--release-stale-lock`.
 
 ## Instalação a partir do código-fonte (contribuidores)
 
-Enquanto o pacote não é publicado, use uma cópia autorizada do repositório.
-Com Node 24 e Google Chrome instalados:
+Para contribuir em uma cópia autorizada do repositório, use Node 24 e Google
+Chrome:
 
 ```bash
 npm ci
@@ -147,7 +144,7 @@ disponíveis para importação, simulação, sessão, diagnóstico e relatórios
 
 ## Fluxo seguro
 
-Os exemplos abaixo usam o comando da futura instalação por npm. Na instalação
+Os exemplos abaixo usam o comando da instalação por npm. Na instalação
 a partir do código-fonte, substitua `x-cleaner` por `node dist/cli.js` e execute
 os comandos na pasta do projeto. `--data-dir` é opcional; se você o usar, repita
 o **mesmo diretório** em todos os comandos para trabalhar com o mesmo catálogo.
@@ -248,8 +245,8 @@ sessão e não altera nem apaga o Archive original.
 - Mensagens diretas, bookmarks, listas, seguidores, seguindo, comunidades,
   Spaces, mudanças de perfil, exclusão da conta, API do X, OAuth, GUI e serviço
   remoto estão fora do escopo.
-- A compatibilidade do formato do Archive real ainda não foi declarada como
-  validada; fixtures sintéticas não substituem a inspeção do Archive do dono.
+- Um Archive real foi validado em uma conta, mas outras variantes podem ser
+  incompatíveis. Fixtures sintéticas não substituem testes com seus dados.
 - A automação depende dos seletores e estados atuais do X. Um estado não
   reconhecido pausa por segurança até uma manutenção do BrowserEngine.
 - A ação no X é irreversível no sentido de que o X Cleaner não promete restaurar
@@ -261,20 +258,17 @@ sessão e não altera nem apaga o Archive original.
 
 ## Roadmap e idiomas
 
-O próximo gate é a validação manual do Archive e da conta do proprietário, em
-etapas de dry-run, um item e pequenos lotes com conferência e retomada. Depois
-disso podem ser avaliados um lançamento público aprovado e manutenção de
-seletores. Inglês e espanhol são extensões futuras do catálogo; o CLI entregue
-é português-first. Um futuro `XApiEngine` também permanece fora do V1.
+O beta precisa de validação com outras variantes de Archive e manutenção dos
+seletores quando a interface do X mudar. Uma release estável e a abertura do
+repositório exigem decisões separadas. Inglês e espanhol são extensões futuras
+do catálogo; o CLI entregue é português-first. Um futuro `XApiEngine` também
+permanece fora do V1.
 
 ## Segurança, licença e marca
 
-Leia [segurança](https://github.com/markintux/x-cleaner/blob/main/SECURITY.md),
-[privacidade](https://github.com/markintux/x-cleaner/blob/main/PRIVACY.md),
-[contribuição](https://github.com/markintux/x-cleaner/blob/main/CONTRIBUTING.md),
-[solução de problemas](https://github.com/markintux/x-cleaner/blob/main/docs/troubleshooting.md)
-e [arquitetura](https://github.com/markintux/x-cleaner/blob/main/docs/architecture.md)
-antes de contribuir. A licença é [MIT](https://github.com/markintux/x-cleaner/blob/main/LICENSE).
+Leia os arquivos `SECURITY.md` e `LICENSE` incluídos no pacote antes de usar ou
+contribuir. O projeto usa a licença MIT; o repositório de desenvolvimento segue
+privado até uma decisão separada do proprietário.
 
 X Cleaner é um projeto independente e não é afiliado, endossado ou patrocinado
 por X Corp., Twitter ou qualquer entidade relacionada. “X” e outras marcas

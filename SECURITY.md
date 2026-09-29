@@ -2,8 +2,9 @@
 
 ## Estado e escopo
 
-O X Cleaner está em beta privado. Não há garantia de compatibilidade com um
-Archive real nem de estabilidade dos seletores da interface do X. Não publique
+O pacote X Cleaner está em beta público no npm; o repositório GitHub permanece
+privado. A validação real foi limitada a uma conta e não garante compatibilidade
+com outros Archives nem estabilidade dos seletores da interface do X. Não publique
 issues com dados de conta até que estejam completamente sanitizados.
 
 ## Relato de vulnerabilidade

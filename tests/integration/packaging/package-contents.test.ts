@@ -80,6 +80,13 @@ describe("conteúdo e execução do pacote", () => {
       consumer
     );
     expect(installed.code, installed.stderr || installed.stdout).toBe(0);
+    const installedCommand = path.join(
+      consumer,
+      "node_modules",
+      ".bin",
+      process.platform === "win32" ? "x-cleaner.cmd" : "x-cleaner"
+    );
+    await expect(access(installedCommand)).resolves.toBeUndefined();
 
     const help = await runCommand(
       process.execPath,

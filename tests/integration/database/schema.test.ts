@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SqliteDatabase } from "../../../src/infrastructure/database/database.js";
 import { migrations } from "../../../src/infrastructure/database/migrations/index.js";
+import { SqlitePlanRepository } from "../../../src/infrastructure/database/repositories/sqlite-plan-repository.js";
+import { SqliteRunRepository } from "../../../src/infrastructure/database/repositories/sqlite-run-repository.js";
 import { Migrator, type Migration } from "../../../src/infrastructure/database/migrator.js";
 
 const timestamp = "2026-01-02T03:04:05.000Z";
@@ -86,6 +88,58 @@ describe("schema SQLite", () => {
       );
   }
 
+  it("atualiza a base anterior sem alterar execuções, itens ou resultados", () => {
+    const database = openDatabase();
+    const migrator = new Migrator(database, { now: () => timestamp });
+    migrator.migrate(migrations.slice(0, 4));
+    insertCatalogPrerequisites(database);
+    insertInteraction(database);
+    new SqlitePlanRepository(database).createSnapshot({
+      plan: {
+        id: "old-plan",
+        accountId: "account-1",
+        catalogCutoffId: 1,
+        fromAt: null,
+        toAt: null,
+        selectedCount: 1,
+        locale: "pt-BR",
+        reviewedAt: timestamp,
+        createdAt: timestamp
+      },
+      types: ["POST"],
+      items: [{ planId: "old-plan", interactionId: 1, sequence: 1, createdAt: timestamp }]
+    });
+    const runs = new SqliteRunRepository(database);
+    runs.createRun({
+      id: "old-run",
+      planId: "old-plan",
+      accountId: "account-1",
+      boundHandle: "conta-sintetica",
+      status: "PAUSED",
+      pauseReason: "UNKNOWN_UI",
+      startedAt: timestamp,
+      pausedAt: timestamp,
+      finishedAt: null,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    });
+    const before = database.connection.prepare("SELECT * FROM interactions").all();
+    const oldRun = runs.getRun("old-run");
+    const oldItems = runs.listRunItems("old-run");
+    migrator.migrate(migrations);
+    migrator.migrate(migrations);
+    expect(database.connection.prepare("SELECT * FROM interactions").all()).toEqual(before);
+    expect(runs.getRun("old-run")).toEqual(oldRun);
+    expect(runs.listRunItems("old-run")).toEqual(oldItems);
+    expect(runs.isRunArchived("old-run")).toBe(false);
+    expect(
+      database.connection
+        .prepare("PRAGMA table_info(cleaning_runs)")
+        .all()
+        .filter((row) => row.name === "archived_at")
+    ).toHaveLength(1);
+  });
+
   it("cria as 13 tabelas e todos os índices de contrato em uma base nova", () => {
     const database = migrateDatabase();
     const tableNames = database.connection
@@ -161,7 +215,8 @@ describe("schema SQLite", () => {
       { version: 1, name: "001_catalog", applied_at: timestamp },
       { version: 2, name: "002_plans", applied_at: timestamp },
       { version: 3, name: "003_runs", applied_at: timestamp },
-      { version: 4, name: "004_audit", applied_at: timestamp }
+      { version: 4, name: "004_audit", applied_at: timestamp },
+      { version: 5, name: "005_run_archiving", applied_at: timestamp }
     ]);
   });
 

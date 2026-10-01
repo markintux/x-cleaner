@@ -16,8 +16,22 @@ export interface RunItemUpdate {
   readonly lastErrorCode?: string | null;
 }
 
+export interface RunTypeOverview {
+  readonly type: string;
+  readonly total: number;
+  readonly processed: number;
+  readonly completed: number;
+  readonly pending: number;
+  readonly failed: number;
+  readonly skipped: number;
+}
+
 export interface RunOverview {
   readonly runId: string;
+  readonly createdAt: string;
+  readonly archivedAt: string | null;
+  readonly repeatedItems: number;
+  readonly typeCounts: readonly RunTypeOverview[];
   readonly types: readonly string[];
   readonly status: CleaningRun["status"];
   readonly pauseReason: CleaningRun["pauseReason"];
@@ -26,12 +40,15 @@ export interface RunOverview {
   readonly completed: number;
   readonly pending: number;
   readonly failed: number;
+  readonly skipped: number;
   readonly overlappingPending: number;
 }
 
 export interface RunRepository {
   /** Aggregate-only menu projection; never selects interaction text or X IDs. */
   listRunOverviews?(): readonly RunOverview[];
+  isRunArchived?(runId: string): boolean;
+  archiveRun?(runId: string, archivedAt: string, transaction: RepositoryTransaction): void;
   createRun(run: CleaningRun, transaction?: RepositoryTransaction): void;
   getRun(runId: string): CleaningRun | null;
   getRunForPlan(planId: string): CleaningRun | null;

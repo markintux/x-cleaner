@@ -131,12 +131,48 @@ Os artefatos de distribuição podem ser inspecionados localmente com
 Depois de importar o Archive, criar uma simulação, confirmar a conta e iniciar
 uma execução, abra `x-cleaner` sem argumentos para ver os runs salvos e escolher
 um lote. Na instalação a partir do código-fonte, use `node dist/cli.js menu`.
-O menu mostra progresso por run, pede um limite de 1 a 25 itens e entrega a
+O menu mostra uma linha por tipo de interação, pede um limite de 1 a 25 itens e entrega a
 execução ao mesmo CLI. Antes de qualquer alteração no X, o CLI mostra a conta e
 os identificadores exatos do lote e exige `APAGAR` digitado pelo proprietário.
-Planos sobrepostos ficam bloqueados no menu para evitar escolher uma segunda
-execução com os mesmos itens pendentes. Depois de cada lote, o menu mostra um
-resumo compacto; pressione Enter para voltar ao painel ou `0` para sair.
+Ao selecionar uma execução pausada por erro, o menu mostra o motivo e o último
+erro do item pendente. Depois de resolver a causa, escolha `T` para revisar uma
+nova tentativa de **1 item** e confirme novamente com `APAGAR`. Voltar ou cancelar
+preserva a pausa; evidência insuficiente pausa novamente. Itens já concluídos não
+são repetidos. Sessão expirada, desafios e limites do X exigem resolver a situação
+ou aguardar antes de tentar.
+
+Se uma pausa por `UNKNOWN_UI` continuar mesmo após tentar novamente, escolha `P`
+para deixar o item problemático de fora **somente desta execução**. O menu mostra
+a conta, tipo, ID, data e erro do item e exige `PULAR` digitado exatamente. Isso
+não altera o X: o item fica registrado como `SKIPPED`, separado dos removidos na
+coluna **Pulados**, e o histórico do erro é preservado. Cancelar mantém a pausa.
+Depois, escolha a execução no painel para preparar um novo lote, com nova revisão
+e confirmação `APAGAR`. Esta opção vale para POST, REPLY, REPOST e LIKE; não está
+disponível para contornar sessão expirada, desafios ou limites do X. Retweets
+manuais antigos com texto `RT @` podem precisar desse tratamento, pois o Archive
+pode classificá-los como reposts embora sejam publicações próprias.
+
+Se houver mais de uma execução para o mesmo tipo, o painel continua mostrando
+uma única linha. As contagens são da execução selecionada, sem somar planos com
+os mesmos itens. Planos que repetem itens de uma execução anterior aparecem como
+**Conferência de remoções anteriores**: os itens pendentes podem já ter sido
+removidos. A coluna **Tratados** inclui resultados como não encontrado; não é uma
+contagem de exclusões realizadas.
+
+Selecione o tipo e escolha `R` para continuar a conferência, `C` para encerrá-la
+ou `H` para consultar o histórico. `R` leva à escolha da quantidade e à revisão
+exata do lote, que exige nova confirmação `APAGAR`. Pausas por erro continuam
+exigindo o fluxo de recuperação descrito acima.
+
+Para encerrar, digite `ENCERRAR` na confirmação. Isso apenas arquiva a conferência
+localmente: não altera o X, não marca itens pendentes como removidos e preserva
+os resultados, tentativas e erros. A conferência encerrada permanece no histórico
+e não pode ser retomada pelo comando `resume`. A opção `H` do painel mostra o
+histórico de todas as execuções. No histórico de um tipo, você pode selecionar
+outra execução para ver seus detalhes e, se ainda estiver aberta, preparar um
+lote com nova revisão e `APAGAR`. Nenhuma conferência é encerrada automaticamente.
+
+Depois de cada lote, pressione Enter para voltar ao painel ou `0` para sair.
 Confira os resultados no X antes de abrir o próximo lote. Voltar ao painel não
 autoriza outra exclusão: cada lote exige nova revisão e `APAGAR`.
 Os comandos individuais continuam

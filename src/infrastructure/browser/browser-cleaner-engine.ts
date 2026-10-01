@@ -104,6 +104,9 @@ export class BrowserCleanerEngine implements CleanerEngine {
       };
       if (this.#reactionNavigationIsUnbound && input.interaction.type === "REPOST") {
         const canonical = await waitForRepostCanonical(page, input.interaction.xInteractionId);
+        if (canonical !== null && "kind" in canonical) {
+          return mapEvidence(canonical, elapsed(startedAt));
+        }
         if (canonical === null) {
           if (isXChallengeUrl(page.url())) {
             return {
@@ -232,11 +235,14 @@ function readXStatus(value: string): { handle: string; interactionId: string } |
 async function waitForRepostCanonical(
   page: BrowserPagePort,
   sourceInteractionId: string
-): Promise<{ handle: string; interactionId: string } | null> {
+): Promise<{ handle: string; interactionId: string } | RepostPageEvidence | null> {
   const startedAt = Date.now();
+  const source = new RepostPage(page);
   while (Date.now() - startedAt < 15_000) {
     const status = readXStatus(page.url());
     if (status !== null && status.interactionId !== sourceInteractionId) return status;
+    const state = await source.inspectState();
+    if (state !== null) return state;
     if (isXLoginUrl(page.url()) || isXChallengeUrl(page.url())) return null;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }

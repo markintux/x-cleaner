@@ -86,6 +86,7 @@ async function executeCommand(
         }).execute({ planId: identifier, account }).run;
     } else {
       run = requireRun(services.runs.getRun(identifier));
+      if (services.runs.isRunArchived?.(run.id) === true) throw new Error("RUN_NOT_RESUMABLE");
     }
     if (mode === "resume") {
       if (services.audit === undefined || services.unitOfWork === undefined) {

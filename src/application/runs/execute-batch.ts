@@ -128,6 +128,7 @@ export class ExecuteBatch {
 
     const lease = await lock.acquire();
     try {
+      if (runs.isRunArchived?.(run.id) === true) throw safetyError("RUN_NOT_RESUMABLE");
       const startedAt = run.startedAt ?? this.#now();
       // A command that owns the lock may safely treat a leftover PROCESSING
       // row as stale. Resume performs the audited version before confirmation.

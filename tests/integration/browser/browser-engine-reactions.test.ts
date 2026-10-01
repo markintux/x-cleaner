@@ -67,12 +67,62 @@ describe("BrowserCleanerEngine para REPOST e LIKE", () => {
     }
   });
 
-  it("desfaz repost somente após redirecionamento, marca do proprietário e confirmação", async () => {
+  it.each(["DeleteRetweet", "Unretweet"])(
+    "desfaz repost com %s somente após redirecionamento, marca do proprietário e confirmação",
+    async (operation) => {
+      const scopedContext = await browser.newContext();
+      let repostUndone = false;
+      let undoRequests = 0;
+      await scopedContext.route(
+        `https://x.com/i/api/graphql/synthetic/${operation}`,
+        async (route) => {
+          undoRequests += 1;
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          repostUndone = true;
+          await route.fulfill({ contentType: "application/json", body: "{}" });
+        }
+      );
+      await scopedContext.route("https://x.com/**/status/**", async (route) => {
+        await route.fulfill({
+          contentType: "text/html",
+          body: `<article data-testid="tweet" data-tweet-id="999">${repostUndone ? "" : "<div>You reposted</div>"}<a href="/author/status/999">status</a><button data-testid="${repostUndone ? "retweet" : "unretweet"}" onclick="document.getElementById('menu').hidden=false">Repost</button><button data-testid="delete-post" onclick="localStorage.setItem('delete-clicks',String(++window.deleteClicks))">Delete</button></article><div id="menu" hidden><button role="menuitem" onclick="fetch('/i/api/graphql/synthetic/${operation}',{method:'POST'});document.querySelector('[data-testid=unretweet]').remove();this.remove()">Undo repost</button></div><script>window.deleteClicks=Number(localStorage.getItem('delete-clicks')??0);history.replaceState(null,'','/author/status/999')</script>`
+        });
+      });
+      const engine = new BrowserCleanerEngine({
+        contextFactory: { profileDirectory: "synthetic", launch: async () => scopedContext },
+        confirmedHandle: "owner"
+      });
+      try {
+        expect((await engine.execute(interaction("REPOST"))).kind).toBe("COMPLETED");
+        expect(await scopedContext.pages()[0]!.evaluate(() => window.deleteClicks)).toBe(0);
+        expect(await scopedContext.pages()[0]!.locator('[data-testid="retweet"]').count()).toBe(1);
+        expect(undoRequests).toBe(1);
+      } finally {
+        await engine.close();
+      }
+    }
+  );
+
+  it.each([
+    ["menu some antes da confirmação", "menu-missing"],
+    ["mudança visual reverte após recarregar", "reverted"],
+    ["servidor recusa a requisição", "request-failed"]
+  ] as const)("não confirma repost quando %s", async (_label, scenario) => {
     const scopedContext = await browser.newContext();
-    await scopedContext.route("https://x.com/owner/status/123", async (route) => {
+    await scopedContext.route(
+      "https://x.com/i/api/graphql/synthetic/DeleteRetweet",
+      async (route) => {
+        await route.fulfill({
+          status: scenario === "request-failed" ? 403 : 200,
+          contentType: "application/json",
+          body: "{}"
+        });
+      }
+    );
+    await scopedContext.route("https://x.com/**/status/**", async (route) => {
       await route.fulfill({
         contentType: "text/html",
-        body: `<article data-testid="tweet" data-tweet-id="999"><div>You reposted</div><a href="/author/status/999">status</a><button data-testid="unretweet" onclick="document.getElementById('menu').hidden=false">Repost</button><button data-testid="delete-post" onclick="window.deleteClicks++">Delete</button></article><div id="menu" hidden><button role="menuitem" onclick="document.querySelector('article').dataset.repostState='undone';this.remove()">Undo repost</button></div><script>window.deleteClicks=0;history.replaceState(null,'','/author/status/999')</script>`
+        body: `<article data-testid="tweet" data-tweet-id="999"><div>You reposted</div><a href="/author/status/999">status</a><button data-testid="unretweet" onclick="this.remove();document.getElementById('menu').hidden=${scenario === "menu-missing" ? "true" : "false"}">Repost</button></article><div id="menu" hidden><button role="menuitem" onclick="fetch('/i/api/graphql/synthetic/DeleteRetweet',{method:'POST'});document.querySelector('article').dataset.repostState='undone';this.remove()">Undo repost</button></div><script>history.replaceState(null,'','/author/status/999')</script>`
       });
     });
     const engine = new BrowserCleanerEngine({
@@ -80,8 +130,16 @@ describe("BrowserCleanerEngine para REPOST e LIKE", () => {
       confirmedHandle: "owner"
     });
     try {
-      expect((await engine.execute(interaction("REPOST"))).kind).toBe("COMPLETED");
-      expect(await scopedContext.pages()[0]!.evaluate(() => window.deleteClicks)).toBe(0);
+      const result = await engine.execute(interaction("REPOST"));
+      expect(result).toMatchObject({
+        kind: "UNKNOWN_UI",
+        errorCode:
+          scenario === "menu-missing"
+            ? "UNDO_REPOST_CONFIRMATION_MISSING"
+            : scenario === "request-failed"
+              ? "UNDO_REPOST_RESPONSE_NOT_CONFIRMED"
+              : "UNDO_REPOST_NOT_CONFIRMED"
+      });
     } finally {
       await engine.close();
     }

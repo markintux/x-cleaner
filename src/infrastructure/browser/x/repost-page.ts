@@ -59,6 +59,10 @@ export class RepostPage {
   async undoRepost(input?: RepostPageInput): Promise<RepostPageEvidence> {
     return this.support.execute(input);
   }
+
+  async inspectState(): Promise<RepostPageEvidence | null> {
+    return this.support.inspectState();
+  }
 }
 
 export function undoRepost(

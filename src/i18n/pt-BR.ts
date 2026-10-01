@@ -50,24 +50,60 @@ export const ptBR: MessageCatalog = {
   "menu.title": "X CLEANER  ·  PAINEL DE LIMPEZA",
   "menu.account": "CONTA CONFIRMADA LOCALMENTE  @{handle}",
   "menu.accountMissing": "Nenhuma conta foi confirmada neste diretório.",
-  "menu.heading": "\nExecuções salvas",
+  "menu.heading": "\nLimpeza por tipo",
   "menu.columnNumber": "Nº",
   "menu.columnTypes": "Tipo",
-  "menu.columnCompleted": "Feitos",
+  "menu.columnCompleted": "Tratados",
   "menu.columnPending": "Restam",
   "menu.columnFailed": "Falhas",
+  "menu.columnSkipped": "Pulados",
   "menu.columnProgress": "Progresso",
   "menu.columnState": "Situação",
   "menu.stateReady": "Pronto",
   "menu.stateInterrupted": "Interrompido",
-  "menu.stateOverlapping": "Sobreposto",
   "menu.statePaused": "Pausado",
   "menu.stateUnavailable": "Indisponível",
-  "menu.overlapNote":
-    "Sobreposto = plano com itens também presentes em outra execução; escolha bloqueada.",
   "menu.empty": "  Nenhuma execução salva. Importe um Archive e crie uma simulação primeiro.",
   "menu.actions": "Ações",
-  "menu.optionChoose": "  [1-{count}]  Preparar um lote",
+  "menu.optionChoose": "  [1-{count}]  Escolher tipo",
+  "menu.optionHistory": "  [H]    Ver histórico",
+  "menu.verificationTitle": "Conferência de remoções anteriores",
+  "menu.verificationPending":
+    "Itens ainda não conferidos: {count}.\nEles podem já ter sido removidos.",
+  "menu.verificationNote":
+    "Conferência = revisão opcional de resultados anteriores. Restam indica itens ainda não conferidos; Tratados inclui os já conferidos.",
+  "menu.verificationActions":
+    "[R] Continuar conferência\n[C] Encerrar conferência (não altera o X)\n[H] Ver histórico\n[Enter] Voltar ao painel\nEscolha uma opção:",
+  "menu.executionActions":
+    "[R] Preparar um lote\n[H] Ver histórico\n[Enter] Voltar ao painel\nEscolha uma opção:",
+  "menu.historyChoose": "[1-{count}] Ver uma execução | [Enter] Voltar ao tipo:",
+  "menu.historyActions": "[H] Ver histórico\n[Enter] Voltar ao painel\nEscolha uma opção:",
+  "menu.cleaningPending": "Itens restantes nesta execução de limpeza: {count}.",
+  "menu.archiveTitle": "ENCERRAR CONFERÊNCIA",
+  "menu.stateSharedPlan": "Plano conjunto",
+  "menu.sharedPlanNote":
+    "Este plano reúne {types}. O lote pode incluir esses tipos; confira os itens na revisão antes de confirmar.",
+  "menu.archiveWarning":
+    "Encerrar esta conferência deixará {count} itens sem conferência. Nada será apagado no X e esses itens não serão contados como removidos. O histórico será preservado.",
+  "menu.archiveQuestion": "Digite ENCERRAR para encerrar a conferência (Enter cancela):",
+  "menu.archiveCanceled": "Conferência mantida. Nenhuma alteração foi feita no X.",
+  "menu.archiveDone":
+    "Conferência encerrada e guardada no histórico. Os itens não conferidos foram preservados; nada foi alterado no X.",
+  "menu.archiveUnavailable":
+    "Não foi possível encerrar a conferência. Confira o painel e aguarde se houver uma execução em andamento.",
+  "menu.historyTitle": "X CLEANER  ·  HISTÓRICO",
+  "menu.historyDate": "Criada em (UTC)",
+  "menu.historyPurpose": "Finalidade",
+  "menu.historyProcessed": "Tratados",
+  "menu.historyPending": "Pendentes",
+  "menu.historyVerification": "Conferência",
+  "menu.historyCleaning": "Limpeza",
+  "menu.historyHint":
+    "Cada linha representa uma execução. Pendentes em uma conferência encerrada são itens não conferidos, sem confirmação de remoção.",
+  "menu.stateArchived": "Confer. encerrada",
+  "menu.stateVerification": "Conferência",
+  "menu.stateFinished": "Finalizado",
+  "menu.stateRunning": "Em andamento",
   "menu.optionStatus": "  [E]    Ver estado local",
   "menu.statusTitle": "X CLEANER  ·  ESTADO LOCAL",
   "menu.statusColumnField": "Campo",
@@ -91,10 +127,42 @@ export const ptBR: MessageCatalog = {
   "menu.invalidChoice": "Opção inválida. Nenhuma alteração foi feita no X.",
   "menu.unavailable":
     "Esta execução não está pronta para retomar. Nenhuma alteração foi feita no X.",
-  "menu.overlapBlocked":
-    "Este plano se sobrepõe a outra execução. Revise os planos antes de continuar; nada foi executado.",
+  "menu.overlapWarning":
+    "Itens restantes que também estão em outra execução: {count}.\nUma nova tentativa pode repetir operações anteriores.\nO histórico será preservado. Nada foi executado no X.\nVocê poderá conferir os itens antes de digitar APAGAR.",
+  "menu.prepareTitle": "X CLEANER  ·  PREPARAR LOTE",
+  "menu.preparePending": "Itens restantes",
+  "menu.prepareRepeated": "Em outra execução",
+  "menu.prepareQuantity": "Quantidade permitida",
+  "menu.prepareRange": "Mínimo: 1 · Máximo: {maxLimit}",
+  "menu.prepareDefault": "Ao pressionar Enter",
+  "menu.prepareDefaultValue": "Revisar até {defaultLimit}",
+  "menu.prepareSteps":
+    "1. Escolha quantos itens deseja revisar agora.\n2. Confira a conta e os itens na próxima tela.\n3. Digite APAGAR somente se quiser executar este lote.",
   "menu.pauseBlocked":
-    "Execução pausada por {reason}. Resolva a causa antes de retomar; nada foi executado.",
+    "Execução pausada por {reason}. O histórico foi preservado; nada foi executado nesta seleção.",
+  "menu.pauseError": "Último erro do item pendente: {error}.",
+  "menu.pauseHelpUnknown":
+    "Não foi possível confirmar a operação no X. Você pode tentar novamente após resolver a causa ou deixar o item problemático de fora desta execução para cuidar dele manualmente. Os itens já concluídos serão preservados.",
+  "menu.pauseHelpSession":
+    "Entre novamente no X pelo login do aplicativo antes de tentar. A conta será verificada novamente.",
+  "menu.pauseHelpChallenge":
+    "Resolva a verificação de segurança manualmente no X antes de tentar. O aplicativo não contorna desafios.",
+  "menu.pauseHelpRateLimit":
+    "Aguarde o prazo indicado pelo X antes de tentar novamente. Não use novas tentativas para contornar o limite.",
+  "menu.pauseRetryQuestion":
+    "[T] Revisar nova tentativa de 1 item (exige APAGAR)\n[Enter] Voltar ao painel:",
+  "menu.pauseActionsQuestion":
+    "[T] Tentar novamente 1 item (exige APAGAR)\n[P] Deixar o item problemático de fora (não altera o X)\n[Enter] Voltar ao painel:",
+  "menu.skipReview":
+    "ITEM QUE SERÁ DEIXADO DE FORA\nConta: @{handle}\nTipo: {type}\nID do X: {id}\nData (UTC): {date}\nÚltimo erro: {error}",
+  "menu.skipWarning":
+    "Este item não será mais tentado nesta execução. Nada será apagado no X e ele não será contado como removido. O histórico do erro será preservado. Se desejar removê-lo, cuide dele manualmente no X.",
+  "menu.skipQuestion": "Digite PULAR para deixar somente este item de fora (Enter cancela):",
+  "menu.skipCanceled": "Operação cancelada. O item continua pendente e a pausa foi preservada.",
+  "menu.skipDone":
+    "Item deixado de fora e registrado como pulado. Nenhuma alteração foi feita no X. Confira o painel; se houver itens restantes, escolha a execução para preparar um novo lote.",
+  "menu.skipUnavailable":
+    "Não foi possível concluir esta operação. Confira o estado atualizado no painel. Se outra execução estiver em andamento, aguarde seu término.",
   "menu.limitQuestion": "Limite deste lote (1 a {maxLimit}; Enter usa {defaultLimit}):",
   "menu.invalidLimit": "Limite inválido. Escolha de 1 a {maxLimit}; nada foi executado.",
   "menu.review":

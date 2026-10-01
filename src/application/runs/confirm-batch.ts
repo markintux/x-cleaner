@@ -87,6 +87,7 @@ export class ConfirmBatch {
     if (run === null) {
       throw safetyError("RUN_NOT_FOUND");
     }
+    if (this.runs.isRunArchived?.(run.id) === true) throw safetyError("RUN_NOT_RESUMABLE");
     if (run.status === "COMPLETED" || run.status === "FAILED") {
       throw safetyError("RUN_NOT_RESUMABLE");
     }
@@ -158,6 +159,7 @@ export class ConfirmBatch {
       return { confirmed: false, canceled: true, batch: null, summary };
     }
 
+    if (this.runs.isRunArchived?.(run.id) === true) throw safetyError("RUN_NOT_RESUMABLE");
     const now = this.#now();
     const batch: RunBatch = {
       id: this.#idFactory(),

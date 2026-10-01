@@ -11,6 +11,11 @@ export const X_URLS = {
   login: "https://x.com/i/flow/login"
 } as const;
 
+/** Observe the browser's own request; never invoke the endpoint directly. */
+export const X_RESPONSE_PATTERNS = {
+  undoRepost: /\/(?:DeleteRetweet|Unretweet)(?:\?|$)/iu
+} as const;
+
 export function isXLoginUrl(value: string): boolean {
   const url = new URL(value, X_URLS.origin);
   return (
@@ -42,7 +47,11 @@ export const X_TEXT_KEYS = {
     "post não encontrado",
     "status não encontrado",
     "this post has been deleted",
-    "esta publicação foi excluída"
+    "esta publicação foi excluída",
+    "this page doesn’t exist",
+    "this page doesn't exist",
+    "esta página não existe",
+    "essa página não existe"
   ],
   unavailable: [
     "this post is unavailable",
@@ -246,6 +255,11 @@ export const X_SELECTORS = {
       '[role="button"][aria-label="Undo repost"]',
       '[role="button"][aria-label="Desfazer repost"]',
       '[role="button"][aria-label="Desfazer republicação"]'
+    ],
+    inactiveAction: [
+      '[data-testid="retweet"]',
+      '[data-action="repost"]',
+      '[data-action="retweet"]'
     ],
     removedState: [
       '[data-repost-state="undone"]',

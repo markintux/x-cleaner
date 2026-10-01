@@ -40,6 +40,34 @@ describe("BrowserCleanerEngine para POST e REPLY", () => {
     await browser?.close();
   }, 30_000);
 
+  it.each([
+    "Hmm...this page doesn’t exist. Try searching for something else.",
+    "Hmm...this page doesn't exist. Try searching for something else.",
+    "Esta página não existe.",
+    "Essa página não existe."
+  ])("reconhece REPLY removido manualmente sem tentar excluí-lo: %s", async (message) => {
+    await page.route("http://local.test/status/123", async (route) => {
+      await route.fulfill({
+        contentType: "text/html; charset=utf-8",
+        body: `<main>${message}</main>`
+      });
+    });
+    try {
+      const engine = new BrowserCleanerEngine({
+        page,
+        confirmedHandle: "owner",
+        statusUrlBuilder: () => "http://local.test/status/123"
+      });
+      expect(await engine.execute(interaction("REPLY"))).toMatchObject({
+        kind: "TERMINAL_NON_ERROR",
+        outcome: "NOT_FOUND"
+      });
+      expect(await page.locator("article").count()).toBe(0);
+    } finally {
+      await page.unroute("http://local.test/status/123");
+    }
+  });
+
   it.each(["POST", "REPLY"] as const)(
     "delega a exclusão para %s",
     async (type) => {

@@ -19,6 +19,17 @@ export interface BrowserPagePort {
   goto(url: string, options?: { readonly waitUntil?: "domcontentloaded" }): Promise<unknown>;
   url(): string;
   locator(selector: string): BrowserLocatorPort;
+  waitForResponse?(
+    predicate: (response: BrowserResponsePort) => boolean,
+    options?: { readonly timeout?: number }
+  ): Promise<BrowserResponsePort>;
+}
+
+export interface BrowserResponsePort {
+  url(): string;
+  ok(): boolean;
+  request(): { method(): string };
+  finished(): Promise<Error | null>;
 }
 
 export interface BrowserContextPort {

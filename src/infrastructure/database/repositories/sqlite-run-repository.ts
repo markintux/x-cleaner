@@ -92,7 +92,30 @@ export class SqliteRunRepository implements RunRepository {
   listRunOverviews(): readonly RunOverview[] {
     return this.database.connection
       .prepare(
-        `SELECT r.id, r.status, r.pause_reason, p.selected_count AS total,
+        `SELECT r.id, r.status, r.pause_reason, r.created_at, r.archived_at,
+                p.selected_count AS total,
+                (SELECT count(*) FROM cleaning_run_items i
+                 WHERE i.run_id = r.id AND EXISTS (
+                   SELECT 1 FROM cleaning_run_items other
+                   JOIN cleaning_runs older ON older.id = other.run_id
+                   WHERE other.interaction_id = i.interaction_id
+                     AND older.account_id = r.account_id
+                     AND (older.created_at < r.created_at
+                       OR (older.created_at = r.created_at AND older.id < r.id))
+                 )) AS repeated_items,
+                (SELECT json_group_array(json_object(
+                   'type', type, 'total', total, 'processed', processed,
+                   'completed', completed, 'pending', pending, 'failed', failed, 'skipped', skipped
+                 )) FROM (
+                   SELECT interaction.type AS type, count(*) AS total,
+                     sum(i.status NOT IN ('PENDING', 'PROCESSING')) AS processed,
+                     sum(i.status = 'COMPLETED') AS completed,
+                     sum(i.status = 'PENDING') AS pending,
+                     sum(i.status = 'FAILED') AS failed,
+                     sum(i.status = 'SKIPPED') AS skipped
+                   FROM cleaning_run_items i JOIN interactions interaction ON interaction.id = i.interaction_id
+                   WHERE i.run_id = r.id GROUP BY interaction.type
+                 )) AS type_counts,
                 (SELECT group_concat(interaction_type, ',')
                  FROM cleaning_plan_types WHERE plan_id = r.plan_id) AS types,
                 (SELECT count(*) FROM cleaning_run_items i
@@ -104,6 +127,8 @@ export class SqliteRunRepository implements RunRepository {
                  WHERE i.run_id = r.id AND i.status = 'PENDING') AS pending,
                 (SELECT count(*) FROM cleaning_run_items i
                  WHERE i.run_id = r.id AND i.status = 'FAILED') AS failed,
+                (SELECT count(*) FROM cleaning_run_items i
+                 WHERE i.run_id = r.id AND i.status = 'SKIPPED') AS skipped,
                 (SELECT count(*) FROM cleaning_run_items i
                  WHERE i.run_id = r.id AND i.status = 'PENDING'
                    AND EXISTS (
@@ -127,6 +152,10 @@ export class SqliteRunRepository implements RunRepository {
         const row = raw as Row;
         return {
           runId: requiredString(row.id),
+          createdAt: requiredString(row.created_at),
+          archivedAt: nullableString(row.archived_at),
+          repeatedItems: requiredNumber(row.repeated_items),
+          typeCounts: JSON.parse(requiredString(row.type_counts)) as RunOverview["typeCounts"],
           types: requiredString(row.types).split(","),
           status: requiredString(row.status) as CleaningRunStatus,
           pauseReason: nullableString(row.pause_reason) as PauseReason | null,
@@ -135,9 +164,23 @@ export class SqliteRunRepository implements RunRepository {
           completed: requiredNumber(row.completed),
           pending: requiredNumber(row.pending),
           failed: requiredNumber(row.failed),
+          skipped: requiredNumber(row.skipped),
           overlappingPending: requiredNumber(row.overlapping_pending)
         };
       });
+  }
+
+  isRunArchived(runId: string): boolean {
+    const row = this.database.connection
+      .prepare("SELECT archived_at FROM cleaning_runs WHERE id = ?")
+      .get(runId);
+    return row !== undefined && row.archived_at !== null;
+  }
+
+  archiveRun(runId: string, archivedAt: string, transaction: RepositoryTransaction): void {
+    connectionFor(this.database.connection, transaction)
+      .prepare("UPDATE cleaning_runs SET archived_at = ? WHERE id = ? AND archived_at IS NULL")
+      .run(archivedAt, runId);
   }
 
   getRunItem(runItemId: number): CleaningRunItem | null {

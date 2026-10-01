@@ -1,7 +1,17 @@
-import type { BrowserLocatorPort, BrowserPagePort } from "../browser-session.js";
+import type {
+  BrowserLocatorPort,
+  BrowserPagePort,
+  BrowserResponsePort
+} from "../browser-session.js";
 import { normalizeAccountHandle } from "../../../domain/account.js";
 import { isDecimalString } from "../../../domain/interaction.js";
-import { isXChallengeUrl, isXLoginUrl, X_SELECTORS, X_TEXT_KEYS } from "./selectors.js";
+import {
+  isXChallengeUrl,
+  isXLoginUrl,
+  X_RESPONSE_PATTERNS,
+  X_SELECTORS,
+  X_TEXT_KEYS
+} from "./selectors.js";
 
 export type ReactionPageEvidenceKind =
   | "COMPLETED"
@@ -102,15 +112,69 @@ export class ReactionPageSupport {
     }
 
     await action.click();
-    const afterAction = await this.readAfterAction(target);
-    if (afterAction !== null) return afterAction;
     if (this.options.confirmRepostMenu) {
       const confirmation = await this.findUndoRepostConfirmation();
       if (confirmation === null) return unknown("UNDO_REPOST_CONFIRMATION_MISSING");
+      if (this.page.waitForResponse === undefined) {
+        return unknown("UNDO_REPOST_RESPONSE_EVIDENCE_MISSING");
+      }
+      // Register before clicking, and let the request finish before navigating.
+      const responsePromise = this.page
+        .waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            X_RESPONSE_PATTERNS.undoRepost.test(response.url()),
+          { timeout: 15_000 }
+        )
+        .catch(() => null);
       await confirmation.click();
-      return (await this.waitForRemoved(target)) ?? unknown(this.config.notConfirmedCode);
+      const response = await responsePromise;
+      if (response === null || !response.ok() || !(await responseFinished(response))) {
+        return unknown("UNDO_REPOST_RESPONSE_NOT_CONFIRMED");
+      }
+      return (
+        (await this.verifyRepostAfterReload(expected)) ?? unknown(this.config.notConfirmedCode)
+      );
     }
+    const afterAction = await this.readAfterAction(target);
+    if (afterAction !== null) return afterAction;
     return unknown(this.config.notConfirmedCode);
+  }
+
+  /** Inspect terminal page evidence without clicking any control. */
+  async inspectState(): Promise<ReactionPageEvidence | null> {
+    return this.readNonInteractiveState();
+  }
+
+  private async verifyRepostAfterReload(
+    expected: ReactionPageInput
+  ): Promise<ReactionPageEvidence | null> {
+    const canonicalUrl = this.page.url();
+    await this.page.goto(canonicalUrl, { waitUntil: "domcontentloaded" });
+    const startedAt = Date.now();
+    while (true) {
+      if (await this.hasChallengeEvidence()) {
+        return evidence("CHALLENGE", "SECURITY_CHALLENGE");
+      }
+      if (await this.hasUnauthenticatedEvidence()) {
+        return evidence("UNAUTHENTICATED", "LOGIN_REQUIRED");
+      }
+      const target = await this.findTarget(expected.expectedInteractionId);
+      if (target !== null && (await this.proveIdentity(target, expected)) === null) {
+        const targetText =
+          (await (target.innerText?.() ?? target.textContent()))?.toLowerCase() ?? "";
+        if (
+          !containsAny(targetText, X_TEXT_KEYS.repostedByYou) &&
+          (await this.findAction(target)) === null &&
+          (await this.findOne(target, X_SELECTORS.repost.inactiveAction)) !== null
+        ) {
+          return evidence("COMPLETED", "REPOST_INACTIVE_AFTER_RELOAD");
+        }
+      }
+      const remaining = 5_000 - (Date.now() - startedAt);
+      if (remaining <= 0) return null;
+      await this.sleep(Math.min(this.pollIntervalMs, remaining));
+    }
   }
 
   private resolveExpected(input?: ReactionPageInput): ReactionPageInput | null {
@@ -194,17 +258,6 @@ export class ReactionPageSupport {
       return evidence("COMPLETED", "ACTION_NO_LONGER_PRESENT");
     }
     return null;
-  }
-
-  private async waitForRemoved(target: BrowserLocatorPort): Promise<ReactionPageEvidence | null> {
-    const startedAt = Date.now();
-    while (true) {
-      const result = await this.readAfterAction(target);
-      if (result !== null) return result;
-      const remaining = 5_000 - (Date.now() - startedAt);
-      if (remaining <= 0) return null;
-      await this.sleep(Math.min(this.pollIntervalMs, remaining));
-    }
   }
 
   private async proveIdentity(
@@ -535,6 +588,23 @@ function readStatusUrlIdentity(
 
 function containsAny(value: string, candidates: readonly string[]): boolean {
   return candidates.some((candidate) => value.includes(candidate));
+}
+
+async function responseFinished(response: BrowserResponsePort): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      response.finished().then(
+        (error) => error === null,
+        () => false
+      ),
+      new Promise<boolean>((resolve) => {
+        timeout = setTimeout(() => resolve(false), 15_000);
+      })
+    ]);
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout);
+  }
 }
 
 function evidence(kind: ReactionPageEvidenceKind, reason: string): ReactionPageEvidence {

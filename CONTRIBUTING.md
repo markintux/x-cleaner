@@ -1,7 +1,7 @@
 # Contribuindo
 
-O projeto permanece em beta privado e aceita somente contribuições autorizadas
-durante esta etapa. O idioma normal da documentação e do CLI é português; o
+O projeto é um beta público e aceita contribuições por issues e pull requests.
+O idioma normal da documentação e do CLI é português; o
 catálogo mantém chaves estáveis para futuras traduções.
 
 ## Dados e fixtures

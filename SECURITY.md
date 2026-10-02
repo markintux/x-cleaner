@@ -2,16 +2,16 @@
 
 ## Estado e escopo
 
-O pacote X Cleaner está em beta público no npm; o repositório GitHub permanece
-privado. A validação real foi limitada a uma conta e não garante compatibilidade
+O pacote X Cleaner está em beta público no npm e o repositório GitHub é público.
+A validação real foi limitada a uma conta e não garante compatibilidade
 com outros Archives nem estabilidade dos seletores da interface do X. Não publique
 issues com dados de conta até que estejam completamente sanitizados.
 
 ## Relato de vulnerabilidade
 
 Para um possível problema de segurança, não abra uma issue pública com o
-material. Use o canal privado de segurança do repositório privado ou contate o
-proprietário por um canal previamente autorizado, descrevendo impacto,
+material. Use [Report a vulnerability](https://github.com/markintux/x-cleaner/security/advisories/new)
+na aba Security para enviar um relato privado, descrevendo impacto,
 versão/commit, passos mínimos reproduzíveis e uma correção sugerida quando
 possível. Aguarde a confirmação antes de divulgar detalhes. Nunca envie senha,
 cookie, token, Archive, perfil de navegador ou relatório bruto.

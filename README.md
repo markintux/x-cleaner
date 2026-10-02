@@ -1,18 +1,44 @@
 # X Cleaner
 
+**Seu histórico no X. Seus dados no seu computador. Você decide o que remover.**
+
+[![npm](https://img.shields.io/npm/v/x-cleaner)](https://www.npmjs.com/package/x-cleaner)
+[![CI](https://github.com/markintux/x-cleaner/actions/workflows/ci.yml/badge.svg)](https://github.com/markintux/x-cleaner/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/badge/Node.js-24%2B-339933)](https://nodejs.org/en/download)
+[![Licença MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue)](LICENSE)
+
 O X Cleaner é um CLI local-first para importar o X Archive oficial da própria
 conta, revisar posts, replies, reposts e likes, e executar uma limpeza explícita
 pela interface web oficial do X. O arquivo, a sessão do navegador, o catálogo,
 os registros e os relatórios permanecem no computador local.
 
+[Começar](#instalação-pelo-npm) · [Como usar](#fluxo-seguro) ·
+[Dados locais](#dados-locais-e-limpeza-da-sessão) ·
+[Limitações](#limitações-conhecidas) · [Contribuir](#contribuir)
+
+## O que você pode fazer
+
+| Recurso                   | Como funciona                                                     |
+| ------------------------- | ----------------------------------------------------------------- |
+| Importar seu histórico    | Lê o ZIP oficial do X ou uma pasta já extraída.                   |
+| Escolher o que limpar     | Filtra posts, replies, reposts e likes por tipo e período.        |
+| Simular antes de executar | Mostra a seleção com `dry-run`, sem alterar o X.                  |
+| Limpar em pequenos lotes  | Exige revisão da conta, dos itens e confirmação `APAGAR`.         |
+| Pausar e continuar        | Guarda o progresso local e preserva os resultados já registrados. |
+| Conferir o resultado      | Mantém histórico e relatórios no seu computador.                  |
+
 ## Estado do projeto
 
-O pacote no npm está em beta público; o repositório GitHub permanece privado.
+**Beta público:** [`x-cleaner@0.1.0`](https://www.npmjs.com/package/x-cleaner)
+está disponível no npm e o código-fonte está aberto neste repositório.
 Houve validação manual limitada com um Archive e uma conta reais, incluindo os
 quatro tipos de interação e lotes pequenos. Isso não garante compatibilidade
 com outros Archives nem estabilidade diante de mudanças na interface do X.
 Os testes automatizados usam somente dados sintéticos e páginas locais; eles
-não comprovam uma execução real.
+não comprovam uma execução real. O CI verifica macOS, Linux e Windows com Node 24.
+
+> **Comece com um item.** Mantenha seu Archive original e confira o resultado
+> no X antes de continuar. O programa não oferece restauração do conteúdo removido.
 
 ## Instalação pelo npm
 
@@ -108,10 +134,11 @@ confirmando que nenhum executor está ativo, repita o comando com
 
 ## Instalação a partir do código-fonte (contribuidores)
 
-Para contribuir em uma cópia autorizada do repositório, use Node 24 e Google
-Chrome:
+Clone o repositório e use Node 24 e Google Chrome:
 
 ```bash
+git clone https://github.com/markintux/x-cleaner.git
+cd x-cleaner
 npm ci
 npm run build
 node dist/cli.js doctor
@@ -128,9 +155,10 @@ Os artefatos de distribuição podem ser inspecionados localmente com
 
 ### Menu interativo
 
-Depois de importar o Archive, criar uma simulação, confirmar a conta e iniciar
-uma execução, abra `x-cleaner` sem argumentos para ver os runs salvos e escolher
-um lote. Na instalação a partir do código-fonte, use `node dist/cli.js menu`.
+Abra `x-cleaner` sem argumentos para acessar o menu. Ele reúne importação,
+simulação, sessão, estado local e execuções salvas. Depois de preparar um plano
+e confirmar a conta, você pode revisar e iniciar um lote. Na instalação a partir
+do código-fonte, use `node dist/cli.js menu`.
 O menu mostra uma linha por tipo de interação, pede um limite de 1 a 25 itens e entrega a
 execução ao mesmo CLI. Antes de qualquer alteração no X, o CLI mostra a conta e
 os identificadores exatos do lote e exige `APAGAR` digitado pelo proprietário.
@@ -295,16 +323,37 @@ sessão e não altera nem apaga o Archive original.
 ## Roadmap e idiomas
 
 O beta precisa de validação com outras variantes de Archive e manutenção dos
-seletores quando a interface do X mudar. Uma release estável e a abertura do
-repositório exigem decisões separadas. Inglês e espanhol são extensões futuras
+seletores quando a interface do X mudar. A publicação do beta não significa
+que o V1 foi declarado estável. Inglês e espanhol são extensões futuras
 do catálogo; o CLI entregue é português-first. Um futuro `XApiEngine` também
 permanece fora do V1.
 
+## Contribuir
+
+Sugestões, melhorias na documentação e correções são bem-vindas. Leia o
+[guia de contribuição](CONTRIBUTING.md) antes de abrir um pull request.
+
+- Para um erro de uso, consulte o [guia de diagnóstico](docs/troubleshooting.md).
+- Para relatar um bug, abra uma [issue](https://github.com/markintux/x-cleaner/issues)
+  com a versão, sistema operacional, código do erro e passos reproduzíveis.
+  Use exemplos sintéticos e remova dados pessoais da saída.
+- Para entender o projeto, consulte a [arquitetura](docs/architecture.md)
+  e a [política de privacidade](PRIVACY.md).
+- Para vulnerabilidades, siga a [política de segurança](SECURITY.md)
+  e use o relato privado.
+
+Antes de enviar uma mudança, execute:
+
+```bash
+npm run check
+npm run check:private-artifacts
+npm run inspect:package
+```
+
 ## Segurança, licença e marca
 
-Leia os arquivos `SECURITY.md` e `LICENSE` incluídos no pacote antes de usar ou
-contribuir. O projeto usa a licença MIT; o repositório de desenvolvimento segue
-privado até uma decisão separada do proprietário.
+Leia a [política de segurança](SECURITY.md) e a [licença MIT](LICENSE)
+incluídas no pacote antes de usar ou contribuir.
 
 X Cleaner é um projeto independente e não é afiliado, endossado ou patrocinado
 por X Corp., Twitter ou qualquer entidade relacionada. “X” e outras marcas
